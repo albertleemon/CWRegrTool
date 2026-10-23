@@ -61,6 +61,27 @@ def _drop_minor_neighbours(motion, k):
     return np.array(sorted(removed), int)
 
 
+def load_motion(path):
+    """Realignment parameters as (n_vol, 6) [trans x,y,z mm, rot x,y,z rad].
+
+    Accepts an SPM rp_*.txt (whitespace separated, 6 columns) or an fMRIPrep
+    *_desc-confounds_timeseries.tsv (columns trans_x..rot_z). Both use mm / radians;
+    only the translations matter for the weighting matrix."""
+    path = str(path)
+    if path.endswith(".tsv"):
+        import csv
+        with open(path, newline="") as f:
+            rows = list(csv.DictReader(f, delimiter="\t"))
+        cols = ["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z"]
+        return np.array([[float(r[c]) for c in cols] for r in rows])
+    return np.loadtxt(path)
+
+
+def motion_steps(rp):
+    """Frame-to-frame translation (mm) between consecutive volumes, length n_vol-1."""
+    return np.linalg.norm(np.diff(np.asarray(rp, float)[:, :3], axis=0), axis=1)
+
+
 def rp_weighting_matrix(rp, n_vol, threshold=0.3, k=25):
     """Weighting matrix (n_vol x n_vol) from SPM realignment parameters.
 

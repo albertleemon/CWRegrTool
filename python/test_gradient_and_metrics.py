@@ -69,3 +69,13 @@ def test_eoec_evaluate_reference_vs_noisy():
     assert 8 <= good["band"][0] <= 10 and good["band"][1] >= 12.5
     assert good["jaccard"] > bad["jaccard"]
     assert good["spectral_distance_closed"] < bad["spectral_distance_closed"]
+
+
+def test_load_fmriprep_tsv(tmp_path):
+    from gradient_correction import load_motion, motion_steps
+    cols = ["trans_x", "trans_y", "trans_z", "rot_x", "rot_y", "rot_z", "framewise_displacement"]
+    rows = ["\t".join(cols), "\t".join(["0.0"] * 6 + ["n/a"]), "\t".join(["0.5", "0", "0", "0", "0", "0", "0.5"])]
+    p = tmp_path / "c_desc-confounds_timeseries.tsv"
+    p.write_text("\n".join(rows) + "\n")
+    rp = load_motion(p)
+    assert rp.shape == (2, 6) and abs(motion_steps(rp)[0] - 0.5) < 1e-12

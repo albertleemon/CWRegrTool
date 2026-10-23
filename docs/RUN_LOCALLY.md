@@ -37,3 +37,13 @@ python python/diagnose.py out/
 - 记录长度约 3.47 M 样本，最后一个 volume 之后仍有约 12 s，不会触发“最后一个 artifact 超出记录”。
 - 输出只保留第一个到最后一个 volume 之间的部分，约 5 分 20 秒；校正范围外没有模板，仍含梯度伪影，所以被剪掉。
 - 如果 `pipeline_log.json` 里 `clipped_channels_fraction` 不为空，说明有通道的梯度伪影超出放大器量程。这一版 Python 没有削波处理，请把这个字段一并发给我。
+
+## 头动参数：用 fMRIPrep 的 confounds.tsv 代替 SPM 的 rp 文件
+`--rp` 直接接受 fMRIPrep 的 `*_desc-confounds_timeseries.tsv`（读取 `trans_x/y/z`、`rot_x/y/z`，单位 mm 与弧度，与 SPM rp 相同）：
+```
+python python/run_pipeline.py "$IN" $OUT/out --exclude 65 66 \
+   --rp sub-BOR5A_task-rest_run-01_desc-confounds_timeseries.tsv --threshold 0.15
+```
+MATLAB 版只读 rp 文本文件，先转换：`python python/fmriprep_to_rp.py confounds.tsv rp_run01.txt`，再设 `opts.rp_file`、`opts.threshold`。
+
+对 sub-BOR5A 这个 run：tsv 有 356 行，与 `R128` 数量一致；相邻 volume 的最大平移位移只有 0.293 mm，所以论文的 0.3 mm 阈值下没有任何头动事件，会退化为 moving average。阈值 0.15 mm 约有 5 个事件，0.1 mm 有 18 个。

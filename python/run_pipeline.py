@@ -17,8 +17,8 @@ import numpy as np
 from scipy.signal import resample_poly
 
 from cwregression import bandpass, cw_regression
-from gradient_correction import (gradient_correct, moving_average_matrix,
-                                 rp_weighting_matrix)
+from gradient_correction import (gradient_correct, load_motion, motion_steps,
+                                 moving_average_matrix, rp_weighting_matrix)
 
 
 def volume_onsets(raw, marker):
@@ -86,8 +86,18 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
     pre, post = span if span else (0, tr - 1)            # artifact span relative to marker
 
     # 1. gradient artifact: every channel, CWL included
+    n_events = 0
     if rp is not None:
-        W = rp_weighting_matrix(np.loadtxt(rp), len(onsets), threshold, n_templates)
+        motion = load_motion(rp)
+        if len(motion) != len(onsets):
+            print(f"WARNING: {len(motion)} motion rows but {len(onsets)} volume markers")
+        steps = motion_steps(motion[:len(onsets)])
+        n_events = int((steps > threshold).sum())
+        print(f"head motion: {n_events} volume steps > {threshold} mm (max step {steps.max():.3f} mm)")
+        if n_events == 0:
+            print("  -> no motion events: templates fall back to moving average; "
+                  "lower --threshold to use the motion information")
+        W = rp_weighting_matrix(motion, len(onsets), threshold, n_templates)
         method = "rp_info"
     else:
         W = moving_average_matrix(len(onsets), n_templates)
@@ -126,6 +136,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         vhdr=str(vhdr), method=method, n_volumes=len(onsets), tr_samples=tr,
         span=[pre, post], n_templates=n_templates, threshold_mm=threshold, band=band,
         fs_out=fs, window_s=window_s, delay_s=delay_s,
+        motion_events=(n_events if rp is not None else None),
         eeg_channels=[names[i] for i in eeg_idx], cwl_channels=[names[i] for i in cwl_idx],
         ecg=[names[i] for i in ecg_idx], clipped_channels_fraction=clipped, samples_out=int(out.shape[1])), indent=2))
     return out, names
@@ -134,7 +145,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("vhdr"); p.add_argument("out_dir")
-    p.add_argument("--rp", help="SPM rp_*.txt (omit -> moving average)")
+    p.add_argument("--rp", help="SPM rp_*.txt or fMRIPrep *_desc-confounds_timeseries.tsv (omit -> moving average)")
     p.add_argument("--marker", default="R128")
     p.add_argument("--cwl-regex", default=r"^CW")
     p.add_argument("--ecg", default="ECG")
