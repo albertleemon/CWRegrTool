@@ -54,6 +54,6 @@ def test_unrelated_regressors_do_limited_damage():
     fs, brain, _, cwl = synth()
     out = cw_regression(brain, cwl * 0 + np.random.default_rng(1).normal(size=cwl.shape), fs)
     from cwregression import bandpass
-    # 126 regressors (6 CWL x 43 lags) per 4 s window overfit the slow EEG
+    # 126 regressors (6 CWL x 21 lags) per 4 s window overfit the slow EEG
     # somewhat even when unrelated; the damage should stay well below 50 %.
     assert rmse(out, bandpass(brain, fs)) < 0.5 * np.std(bandpass(brain, fs))
