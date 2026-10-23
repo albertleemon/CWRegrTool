@@ -32,9 +32,9 @@ def crop(vhdr, out_dir, volumes=30, pre=1.0, marker="R128"):
 
     vols = [int(x) for x in re.findall(rf"^Mk\d+=Response,{marker},(\d+),", m, re.M)]
     tr = int(np.median(np.diff(vols)))
-    a = max(vols[0] - int(pre * fs), 0)
+    a = max(vols[0] - 1 - int(pre * fs), 0)                         # 0-based start
     last = vols[min(volumes, len(vols)) - 1]
-    b = last + tr                                                   # exclusive end
+    b = last - 1 + tr                                               # 0-based exclusive end
 
     mm = np.memmap(eeg, dtype="<i2", mode="r").reshape(-1, nch)
     seg = np.array(mm[a:b])
