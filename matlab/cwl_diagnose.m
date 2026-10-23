@@ -62,6 +62,11 @@ title('variance removed by CWL regression');
 % painters renderer + print: saveas gives a blank image under -nodisplay on some systems
 set(fig, 'Renderer', 'painters');
 print(fig, fullfile(out_dir, 'diagnostics.png'), '-dpng', '-r110');  close(fig);
+% the plotted data, for python/plot_diagnostics_mat.py (MATLAB figures can come out
+% blank under -nodisplay)
+tr = [x0(ch, 1:n); x1(ch, 1:n)];  oz = lab{eeg(ch)};  cwl_names = info.cwl_channels;
+save(fullfile(out_dir, 'diagnostics_data.mat'), 'f', 'p0', 'p1', 'pn', 'pc', 'vr', 'vrn', ...
+     't', 'tr', 'oz', 'cwl_names', '-v7');
 
 bp = @(p, lo, hi) mean(mean(p(f >= lo & f <= hi, :)));
 
