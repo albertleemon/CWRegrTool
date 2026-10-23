@@ -44,7 +44,8 @@ delay_s     = d('delay_s', 0.021);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
-EEG = pop_loadbv(vdir, [vname vext]);
+[vdir, vfile] = fix_header(vdir, [vname vext], out_dir);
+EEG = pop_loadbv(vdir, vfile);
 EEG = eeg_checkset(EEG);
 fs  = EEG.srate;
 labels = {EEG.chanlocs.labels};
@@ -104,4 +105,34 @@ end
 
 function v = setdefault(s, f, v)
 if isfield(s, f) && ~isempty(s.(f)), v = s.(f); end
+end
+
+function [vdir, vfile] = fix_header(vdir, vfile, out_dir)
+% If the header names files that do not exist (e.g. DataFile=RS1.eeg after the
+% recording was renamed), build a patched copy in out_dir/_patched that points to the
+% sibling .eeg/.vmrk with the same stem (the .eeg is symlinked on Linux/macOS, copied on Windows).
+h = fileread(fullfile(vdir, vfile));
+data = strtrim(regexp(h, 'DataFile=([^\r\n]+)', 'tokens', 'once'));
+mrk  = strtrim(regexp(h, 'MarkerFile=([^\r\n]+)', 'tokens', 'once'));
+if exist(fullfile(vdir, data{1}), 'file') && exist(fullfile(vdir, mrk{1}), 'file'), return; end
+[~, stem] = fileparts(vfile);
+eeg = fullfile(vdir, [stem '.eeg']);  vmrk = fullfile(vdir, [stem '.vmrk']);
+assert(exist(eeg, 'file') && exist(vmrk, 'file'), ...
+    'header points to %s / %s which are missing, and no %s.eeg/.vmrk next to it', data{1}, mrk{1}, stem);
+tmp = fullfile(out_dir, '_patched');  if ~exist(tmp, 'dir'), mkdir(tmp); end
+hh = regexprep(h, 'DataFile=[^\r\n]+', ['DataFile=' stem '.eeg']);
+hh = regexprep(hh, 'MarkerFile=[^\r\n]+', ['MarkerFile=' stem '.vmrk']);
+mm = regexprep(fileread(vmrk), 'DataFile=[^\r\n]+', ['DataFile=' stem '.eeg']);
+write_text(fullfile(tmp, [stem '.vhdr']), hh);
+write_text(fullfile(tmp, [stem '.vmrk']), mm);
+target = fullfile(tmp, [stem '.eeg']);
+if ~exist(target, 'file')
+    if isunix, system(['ln -s "' eeg '" "' target '"']); else, copyfile(eeg, target); end
+end
+fprintf('header pointed to %s; using %s.eeg instead\n', data{1}, stem);
+vdir = tmp;  vfile = [stem '.vhdr'];
+end
+
+function write_text(f, t)
+fid = fopen(f, 'w', 'n', 'UTF-8'); fwrite(fid, t, 'char'); fclose(fid);
 end
