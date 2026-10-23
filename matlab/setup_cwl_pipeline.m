@@ -6,7 +6,7 @@ function setup_cwl_pipeline(toolbox_dir)
 %
 % Needs git on the system path for the first run (or clone the two repositories
 % yourself into <toolbox_dir>/eeglab and <toolbox_dir>/eeglab/plugins/bva-io).
-% Also needs the Signal Processing Toolbox.
+% No MATLAB toolbox is required for the pipeline itself.
 
 here = fileparts(mfilename('fullpath'));
 root = fileparts(here);                              % repo root = CWRegrTool
@@ -28,7 +28,6 @@ addpath(genpath(bva_dir));
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
 addpath(here);                                       % this pipeline
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
-assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
 fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
 end
 
