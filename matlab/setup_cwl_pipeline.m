@@ -57,19 +57,20 @@ end
 end
 
 function heal_matlab_path()
-% A saved pathdef.m can lack MATLAB's own toolbox folders (e.g. toolbox/shared/signalwavelet,
-% which breaks butter/filtfilt with "Unable to resolve signalwavelet.internal.isodd").
-% Compare with MATLAB's default path and append any missing folders under matlabroot.
-old = path;
-def = strsplit(restoredefaultpath, pathsep);    % default path string of this installation
-path(old);                                      % make sure nothing else changed
-cur = strsplit(path, pathsep);
-inroot = def(startsWith(def, matlabroot));
-missing = setdiff(inroot, cur);
-missing = missing(cellfun(@(d) exist(d, 'dir') == 7, missing));
-if ~isempty(missing)
-    addpath(missing{:}, '-end');
-    fprintf('added %d MATLAB folders that were missing from the saved path, e.g. %s\n', ...
-            numel(missing), missing{1});
+% A saved pathdef.m can lack MATLAB's own toolbox folders. On this kind of install
+% toolbox/shared/signalwavelet was missing, which breaks butter/filtfilt with
+% "Unable to resolve signalwavelet.internal.isodd". Add it back for this session only.
+if isempty(which('signalwavelet.internal.isodd'))
+    sw = fullfile(matlabroot, 'toolbox', 'shared', 'signalwavelet');
+    if exist(sw, 'dir')
+        addpath(genpath(sw), '-end');           % genpath skips +package/private folders
+        fprintf('added missing MATLAB folders under %s\n', sw);
+    end
+end
+try
+    butter(2, 0.1, 'high');
+catch e
+    error('cwl:signal', ['butter() still fails after path repair: %s\n' ...
+          'Run debug_cwl_env to see which function is missing.'], e.message);
 end
 end
