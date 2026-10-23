@@ -1,0 +1,5 @@
+Unmodified copies of the weighting-matrix functions from the Bergen EEG-fMRI
+Toolbox (BergenToolboxModified, https://github.com/albertleemon/BergenToolboxModified,
+originally Moosmann et al. 2009, (c) The Bergen fMRI Group, GPL v2).
+They are included only so that the headless pipeline runs without the GUI plugin.
+These files remain under GPL v2 (see gpl-v2-license.txt).

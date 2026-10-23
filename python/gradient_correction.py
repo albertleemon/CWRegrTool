@@ -131,7 +131,8 @@ def gradient_correct(eeg, fs, onsets, offset_pre, offset_post, W,
         for i in range(len(starts)):
             sel = np.flatnonzero(W[i])
             if sel.size > 2:
-                dis = 1 - np.corrcoef(A2[sel])
+                with np.errstate(invalid="ignore", divide="ignore"):
+                    dis = np.nan_to_num(1 - np.corrcoef(A2[sel]), nan=0.0)
                 bad = dis.mean(0) > corr_thresh * np.median(dis.mean(0))
                 if bad.any() and not bad.all():
                     sel = sel[~bad]
