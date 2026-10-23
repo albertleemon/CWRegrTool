@@ -68,7 +68,7 @@ for i = 1:size(checks, 1)
     try, checks{i, 2}(); catch e, bad{end+1} = sprintf('  %s: %s', checks{i, 1}, e.message); end %#ok<AGROW>
 end
 if ~isempty(bad)
-    error('cwl:signal', 'Signal Processing Toolbox functions fail (MATLAB path broken?):\n%s', ...
-          strjoin(bad, newline));
+    error('cwl:signal', 'Signal Processing Toolbox functions fail in %s (%s) -- MATLAB path broken?\n%s', ...
+          version, matlabroot, strjoin(bad, newline));
 end
 end

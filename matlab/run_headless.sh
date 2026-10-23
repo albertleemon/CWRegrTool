@@ -10,7 +10,9 @@ set -euo pipefail
 VHDR="$1"; OUT="$2"; EXCL="${3:-65,66}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$OUT"
+MATLAB_CMD="${MATLAB_BIN:-matlab}"
+echo "MATLAB used: $(command -v "$MATLAB_CMD" || echo "$MATLAB_CMD")" | tee "$OUT/matlab_run.log"
 export CWL_VHDR="$VHDR" CWL_OUT="$OUT" CWL_EXCLUDE="$EXCL" CWL_RP="${CWL_RP:-}" CWL_THRESHOLD="${CWL_THRESHOLD:-}"
-"${MATLAB_BIN:-matlab}" -nodisplay -nosplash -nodesktop -batch \
-  "cd('$HERE'); setup_cwl_pipeline; debug_cwl_env; run_headless_job" 2>&1 | tee "$OUT/matlab_run.log"
+"$MATLAB_CMD" -nodisplay -nosplash -nodesktop -batch \
+  "cd('$HERE'); setup_cwl_pipeline; debug_cwl_env; run_headless_job" 2>&1 | tee -a "$OUT/matlab_run.log"
 exit "${PIPESTATUS[0]}"
