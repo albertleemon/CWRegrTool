@@ -23,6 +23,7 @@ if ~exist(bva_dir, 'dir')
 end
 
 addpath(eeglab_dir);
+disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
 addpath(genpath(bva_dir));
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
@@ -34,4 +35,21 @@ end
 function run_git(args)
 [st, msg] = system(['git ' args]);
 if st ~= 0, error('git failed: %s\nInstall git or clone manually.', msg); end
+end
+
+function disable_eeglab_online_check(eeglab_dir)
+% EEGLAB queries sccn.ucsd.edu for plugin versions at every start. On some systems that
+% web call corrupts the MATLAB heap ("malloc(): invalid size") and kills the session.
+% Set option_checkversion = 0 in ~/eeg_options.m (a .bak copy is kept).
+opt = fullfile(getenv('HOME'), 'eeg_options.m');
+if ~exist(opt, 'file')
+    copyfile(fullfile(eeglab_dir, 'functions', 'adminfunc', 'eeg_optionsbackup.m'), opt);
+end
+t  = fileread(opt);
+t2 = regexprep(t, 'option_checkversion\s*=\s*1', 'option_checkversion = 0');
+if ~strcmp(t, t2)
+    copyfile(opt, [opt '.bak']);
+    fid = fopen(opt, 'w'); fwrite(fid, t2, 'char'); fclose(fid);
+    fprintf('EEGLAB online version check disabled in %s (backup: %s.bak)\n', opt, opt);
+end
 end
