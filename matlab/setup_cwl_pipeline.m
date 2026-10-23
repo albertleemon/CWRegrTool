@@ -57,30 +57,36 @@ end
 end
 
 function heal_matlab_path()
-% A saved pathdef.m can lack MATLAB's own toolbox folders (seen: toolbox/shared/signalwavelet,
-% toolbox/eml/..., breaking butter, resample, pwelch). Find the installation's default path
-% by running restoredefaultpath (a script in R2022b), restore the user's path, and append the
-% MathWorks folders that were missing. Only this session is changed; pathdef.m is not written.
-setappdata(0, 'cwl_user_path', path);
-evalc('restoredefaultpath');
-def = strsplit(path, pathsep);
-path(getappdata(0, 'cwl_user_path'));
-rmappdata(0, 'cwl_user_path');
-cur = strsplit(path, pathsep);
-missing = setdiff(def(startsWith(def, matlabroot)), cur, 'stable');
-if ~isempty(missing)
-    addpath(missing{:}, '-end');
-    fprintf('added %d MATLAB folders missing from the saved path (e.g. %s)\n', numel(missing), missing{1});
+% On this kind of install the saved path (and even restoredefaultpath, which reads the same
+% toolbox/local/pathdef.m) lacks some MathWorks folders, so butter fails with
+% "Unable to resolve signalwavelet.internal.isodd" and resample with "Undefined function
+% eml_bitand". Append the folders that hold these functions, for this session only.
+% '-end' keeps everything already on the path in front, so nothing gets shadowed.
+needs = { ...
+    'signalwavelet.internal.isodd', fullfile('toolbox', 'shared', 'signalwavelet'); ...
+    'eml_bitand',                   fullfile('toolbox', 'eml')};
+for i = 1:size(needs, 1)
+    if isempty(which(needs{i, 1}))
+        d = fullfile(matlabroot, needs{i, 2});
+        if exist(d, 'dir')
+            addpath(genpath(d), '-end');
+            fprintf('added missing MATLAB folders under %s (for %s)\n', d, needs{i, 1});
+        else
+            fprintf(2, 'cannot find %s in this MATLAB installation\n', d);
+        end
+    end
 end
-checks = {@() butter(2, 0.1, 'high'), @() resample(randn(100, 1), 1, 10), ...
-          @() pwelch(randn(1000, 1), 256, 128, 256, 500)};
-for i = 1:numel(checks)
+checks = {'butter',   @() butter(2, 0.1, 'high'),                  true; ...
+          'resample', @() resample(randn(100, 1), 1, 10),          true; ...
+          'pwelch',   @() pwelch(randn(1000, 1), 256, 128, 256, 500), false};  % metrics only
+for i = 1:size(checks, 1)
     try
-        checks{i}();
+        checks{i, 2}();
     catch e
-        error('cwl:signal', ['%s still fails after path repair: %s\n' ...
-              'Your MATLAB path is incomplete; see docs/RUN_LOCALLY.md (MATLAB path).'], ...
-              func2str(checks{i}), e.message);
+        if checks{i, 3}
+            error('cwl:signal', '%s still fails after path repair: %s', checks{i, 1}, e.message);
+        end
+        fprintf(2, 'warning: %s fails (%s); only cwl_eoec_metrics needs it\n', checks{i, 1}, e.message);
     end
 end
 end
