@@ -30,12 +30,40 @@ def volume_onsets(raw, marker):
     return np.array(sorted(on), int)
 
 
+def resolve_header(vhdr, out_dir):
+    """If the header points to files that no longer exist (e.g. DataFile=RS1.eeg after
+    renaming the recording), write a patched header/marker copy that points to the
+    sibling .eeg/.vmrk with the same stem."""
+    vhdr = Path(vhdr)
+    h = vhdr.read_text(encoding="utf-8", errors="replace")
+    data = re.search(r"DataFile=(.+)", h).group(1).strip()
+    mrk = re.search(r"MarkerFile=(.+)", h).group(1).strip()
+    ok = (vhdr.parent / data).exists() and (vhdr.parent / mrk).exists()
+    if ok:
+        return vhdr
+    eeg, vmrk = vhdr.with_suffix(".eeg"), vhdr.with_suffix(".vmrk")
+    if not (eeg.exists() and vmrk.exists()):
+        raise SystemExit(f"header points to {data}/{mrk}, which are missing, and no "
+                         f"{eeg.name}/{vmrk.name} next to the header")
+    tmp = Path(out_dir) / "_patched"
+    tmp.mkdir(parents=True, exist_ok=True)
+    m = vmrk.read_text(encoding="utf-8", errors="replace")
+    m = re.sub(r"DataFile=.+", f"DataFile={eeg.resolve()}", m)
+    (tmp / vmrk.name).write_text(m, encoding="utf-8")
+    h = re.sub(r"DataFile=.+", f"DataFile={eeg.resolve()}", h)
+    h = re.sub(r"MarkerFile=.+", f"MarkerFile={vmrk.name}", h)
+    (tmp / vhdr.name).write_text(h, encoding="utf-8")
+    print(f"header pointed to {data}; using {eeg.name} instead")
+    return tmp / vhdr.name
+
+
 def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         exclude=(), n_templates=25, threshold=0.3, span=None,
         band=(0.33, 125.0), target_fs=500, window_s=4.0, delay_s=0.021):
     import mne
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+    vhdr = resolve_header(vhdr, out_dir)
     raw = mne.io.read_raw_brainvision(vhdr, preload=True, verbose="error")
     fs = raw.info["sfreq"]
     names = raw.ch_names
@@ -47,6 +75,9 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
                if i not in cwl_idx + ecg_idx and n not in exclude]
     if not cwl_idx:
         raise SystemExit(f"no CWL channels match {cwl_regex!r}: {names}")
+
+    clip = (np.abs(data) >= 0.999 * np.abs(data).max(axis=1, keepdims=True)).mean(axis=1)
+    clipped = {names[i]: float(c) for i, c in enumerate(clip) if c > 1e-4}
 
     onsets = volume_onsets(raw, marker)
     if len(onsets) < 3:
@@ -79,6 +110,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         raise SystemExit("NaN in data before CWL regression")
 
     # 3. CWL regression on the EEG channels only
+    pre_cwl = data[eeg_idx].astype(np.float32)
     eeg, art = cw_regression(data[eeg_idx], data[cwl_idx], fs, window_s=window_s,
                              delay_s=delay_s, filter_band=None, return_artifact=True)
 
@@ -88,13 +120,14 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
     mne.io.RawArray(out * 1e-6, info, verbose="error").save(
         out_dir / "cwl_corrected_raw.fif", overwrite=True)
     np.savez_compressed(out_dir / "cwl_corrected.npz", data=out, ch_names=names, fs=fs,
-                        eeg_idx=eeg_idx, cwl_idx=cwl_idx, artifact=art)
+                        eeg_idx=eeg_idx, cwl_idx=cwl_idx, artifact=art,
+                        pre_cwl=pre_cwl)
     (out_dir / "pipeline_log.json").write_text(json.dumps(dict(
         vhdr=str(vhdr), method=method, n_volumes=len(onsets), tr_samples=tr,
         span=[pre, post], n_templates=n_templates, threshold_mm=threshold, band=band,
         fs_out=fs, window_s=window_s, delay_s=delay_s,
         eeg_channels=[names[i] for i in eeg_idx], cwl_channels=[names[i] for i in cwl_idx],
-        ecg=[names[i] for i in ecg_idx], samples_out=int(out.shape[1])), indent=2))
+        ecg=[names[i] for i in ecg_idx], clipped_channels_fraction=clipped, samples_out=int(out.shape[1])), indent=2))
     return out, names
 
 

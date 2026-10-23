@@ -3,3 +3,4 @@ scipy
 mne>=1.6
 pytest
 pybv   # only for the tests
+matplotlib
