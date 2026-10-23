@@ -33,7 +33,8 @@ def crop(vhdr, out_dir, volumes=30, pre=1.0, marker="R128"):
     vols = [int(x) for x in re.findall(rf"^Mk\d+=Response,{marker},(\d+),", m, re.M)]
     tr = int(np.median(np.diff(vols)))
     a = max(vols[0] - int(pre * fs), 0)
-    b = vols[min(volumes, len(vols)) - 1] + tr                      # exclusive end
+    last = vols[min(volumes, len(vols)) - 1]
+    b = last + tr                                                   # exclusive end
 
     mm = np.memmap(eeg, dtype="<i2", mode="r").reshape(-1, nch)
     seg = np.array(mm[a:b])
@@ -49,7 +50,7 @@ def crop(vhdr, out_dir, volumes=30, pre=1.0, marker="R128"):
             pos = int(mt.group(3))
             if mt.group(1) == "New Segment":
                 pos_new = 1
-            elif a < pos <= b:                                    # positions are 1-based
+            elif a < pos <= b and not (mt.group(2) == marker and pos > last):  # 1-based
                 pos_new = pos - a
             else:
                 continue
