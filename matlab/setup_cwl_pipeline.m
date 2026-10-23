@@ -22,7 +22,7 @@ if ~exist(bva_dir, 'dir')
     run_git(['clone --depth 1 https://github.com/sccn/bva-io.git "' bva_dir '"']);
 end
 
-heal_matlab_path();                                  % before EEGLAB: may run restoredefaultpath
+heal_matlab_path();
 addpath(eeglab_dir);
 disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
@@ -30,7 +30,6 @@ addpath(bva_dir);                                    % no genpath: it would add 
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
 addpath(here);                                       % this pipeline
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
-assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
 fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
 end
 
@@ -57,36 +56,16 @@ end
 end
 
 function heal_matlab_path()
-% On this kind of install the saved path (and even restoredefaultpath, which reads the same
-% toolbox/local/pathdef.m) lacks some MathWorks folders, so butter fails with
-% "Unable to resolve signalwavelet.internal.isodd" and resample with "Undefined function
-% eml_bitand". Append the folders that hold these functions, for this session only.
-% '-end' keeps everything already on the path in front, so nothing gets shadowed.
-needs = { ...
-    'signalwavelet.internal.isodd', fullfile('toolbox', 'shared', 'signalwavelet'); ...
-    'eml_bitand',                   fullfile('toolbox', 'eml')};
-for i = 1:size(needs, 1)
-    if isempty(which(needs{i, 1}))
-        d = fullfile(matlabroot, needs{i, 2});
-        if exist(d, 'dir')
-            addpath(genpath(d), '-end');
-            fprintf('added missing MATLAB folders under %s (for %s)\n', d, needs{i, 1});
-        else
-            fprintf(2, 'cannot find %s in this MATLAB installation\n', d);
-        end
-    end
-end
-checks = {'butter',   @() butter(2, 0.1, 'high'),                  true; ...
-          'resample', @() resample(randn(100, 1), 1, 10),          true; ...
-          'pwelch',   @() pwelch(randn(1000, 1), 256, 128, 256, 500), false};  % metrics only
-for i = 1:size(checks, 1)
-    try
-        checks{i, 2}();
-    catch e
-        if checks{i, 3}
-            error('cwl:signal', '%s still fails after path repair: %s', checks{i, 1}, e.message);
-        end
-        fprintf(2, 'warning: %s fails (%s); only cwl_eoec_metrics needs it\n', checks{i, 1}, e.message);
+% The pipeline itself does not need the Signal Processing Toolbox (cwl_filter replaces
+% butter/filtfilt, decimation replaces resample); only cwl_eoec_metrics uses pwelch.
+% On installs whose saved path lacks toolbox/shared/signalwavelet, butter fails with
+% "Unable to resolve signalwavelet.internal.isodd": add that folder back for this session.
+% Nothing else is added (adding toolbox/eml shadowed builtins and did not help).
+if isempty(which('signalwavelet.internal.isodd'))
+    d = fullfile(matlabroot, 'toolbox', 'shared', 'signalwavelet');
+    if exist(d, 'dir')
+        addpath(genpath(d), '-end');
+        fprintf('added missing MATLAB folders under %s\n', d);
     end
 end
 end
