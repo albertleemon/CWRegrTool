@@ -22,6 +22,7 @@ if ~exist(bva_dir, 'dir')
     run_git(['clone --depth 1 https://github.com/sccn/bva-io.git "' bva_dir '"']);
 end
 
+heal_matlab_path();                                  % before EEGLAB: may run restoredefaultpath
 addpath(eeglab_dir);
 disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
@@ -29,7 +30,6 @@ addpath(bva_dir);                                    % no genpath: it would add 
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
 addpath(here);                                       % this pipeline
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
-heal_matlab_path();
 assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
 fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
 end
@@ -57,20 +57,30 @@ end
 end
 
 function heal_matlab_path()
-% A saved pathdef.m can lack MATLAB's own toolbox folders. On this kind of install
-% toolbox/shared/signalwavelet was missing, which breaks butter/filtfilt with
-% "Unable to resolve signalwavelet.internal.isodd". Add it back for this session only.
-if isempty(which('signalwavelet.internal.isodd'))
-    sw = fullfile(matlabroot, 'toolbox', 'shared', 'signalwavelet');
-    if exist(sw, 'dir')
-        addpath(genpath(sw), '-end');           % genpath skips +package/private folders
-        fprintf('added missing MATLAB folders under %s\n', sw);
-    end
+% A saved pathdef.m can lack MATLAB's own toolbox folders (seen: toolbox/shared/signalwavelet,
+% toolbox/eml/..., breaking butter, resample, pwelch). Find the installation's default path
+% by running restoredefaultpath (a script in R2022b), restore the user's path, and append the
+% MathWorks folders that were missing. Only this session is changed; pathdef.m is not written.
+setappdata(0, 'cwl_user_path', path);
+evalc('restoredefaultpath');
+def = strsplit(path, pathsep);
+path(getappdata(0, 'cwl_user_path'));
+rmappdata(0, 'cwl_user_path');
+cur = strsplit(path, pathsep);
+missing = setdiff(def(startsWith(def, matlabroot)), cur, 'stable');
+if ~isempty(missing)
+    addpath(missing{:}, '-end');
+    fprintf('added %d MATLAB folders missing from the saved path (e.g. %s)\n', numel(missing), missing{1});
 end
-try
-    butter(2, 0.1, 'high');
-catch e
-    error('cwl:signal', ['butter() still fails after path repair: %s\n' ...
-          'Run debug_cwl_env to see which function is missing.'], e.message);
+checks = {@() butter(2, 0.1, 'high'), @() resample(randn(100, 1), 1, 10), ...
+          @() pwelch(randn(1000, 1), 256, 128, 256, 500)};
+for i = 1:numel(checks)
+    try
+        checks{i}();
+    catch e
+        error('cwl:signal', ['%s still fails after path repair: %s\n' ...
+              'Your MATLAB path is incomplete; see docs/RUN_LOCALLY.md (MATLAB path).'], ...
+              func2str(checks{i}), e.message);
+    end
 end
 end
