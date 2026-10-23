@@ -84,8 +84,8 @@ EEG = pop_saveset(EEG, 'filename', '02_gradient_corrected.set', 'filepath', out_
 %% 2. identical zero-phase band-pass on every channel, then resample
 [z, p, k] = butter(3, band / (fs / 2), 'bandpass');
 [sos, g]  = zp2sos(z, p, k);
-EEG.data  = filtfilt(sos, g, double(EEG.data).').';
-EEG = pop_resample(EEG, target_fs);              % anti-aliased resample (Signal Processing Toolbox)
+EEG.data  = cwl_sosfiltfilt(sos, g, double(EEG.data).').';
+EEG = pop_resample(EEG, target_fs);              % anti-aliased resample (EEGLAB firfilt plugin)
 assert(~any(isnan(EEG.data(:))), 'NaN in data before CWL regression');
 EEG = pop_saveset(EEG, 'filename', '03_filtered.set', 'filepath', out_dir);
 

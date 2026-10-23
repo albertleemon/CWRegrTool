@@ -41,7 +41,7 @@ for c = 1:size(data, 1)
     x  = data(c, :);
     A  = x(idx);                              % nvol x L
     if highpass > 0
-        xf = filtfilt(sos, g, x(:)).';
+        xf = cwl_sosfiltfilt(sos, g, x(:)).';
         A2 = xf(idx);
     else
         A2 = A;

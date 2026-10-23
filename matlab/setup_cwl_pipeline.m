@@ -6,6 +6,7 @@ function setup_cwl_pipeline(toolbox_dir)
 %
 % Needs git on the system path for the first run (or clone the two repositories
 % yourself into <toolbox_dir>/eeglab and <toolbox_dir>/eeglab/plugins/bva-io).
+% Also installs EEGLAB's firfilt plugin (needed by pop_resample).
 % Also needs the Signal Processing Toolbox (butter, filtfilt, resample, pwelch).
 
 here = fileparts(mfilename('fullpath'));
@@ -22,6 +23,7 @@ if ~exist(bva_dir, 'dir')
     run_git(['clone --depth 1 https://github.com/sccn/bva-io.git "' bva_dir '"']);
 end
 
+ensure_firfilt(eeglab_dir);                % pop_resample needs it; a --depth 1 clone lacks plugins
 addpath(eeglab_dir);
 disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
@@ -71,4 +73,19 @@ if ~isempty(bad)
     error('cwl:signal', 'Signal Processing Toolbox functions fail in %s (%s) -- MATLAB path broken?\n%s', ...
           version, matlabroot, strjoin(bad, newline));
 end
+end
+
+function ensure_firfilt(eeglab_dir)
+% EEGLAB ships firfilt as a git submodule; a plain clone leaves plugins/firfilt empty.
+ff = fullfile(eeglab_dir, 'plugins', 'firfilt');
+if exist(fullfile(ff, 'pop_firwsord.m'), 'file'), return; end
+if exist(fullfile(eeglab_dir, '.git'), 'dir')
+    system(sprintf('git -C "%s" submodule update --init --depth 1 plugins/firfilt', eeglab_dir));
+end
+if ~exist(fullfile(ff, 'pop_firwsord.m'), 'file')
+    if exist(ff, 'dir') && numel(dir(ff)) <= 2, rmdir(ff); end   % empty placeholder
+    run_git(['clone --depth 1 https://github.com/sccn/firfilt.git "' ff '"']);
+end
+assert(exist(fullfile(ff, 'pop_firwsord.m'), 'file') > 0, 'could not install firfilt into %s', ff);
+fprintf('installed EEGLAB firfilt plugin in %s\n', ff);
 end
