@@ -10,3 +10,11 @@ Order: `rp_weighting_matrix` -> `gradient_correct` -> band-pass 0.33-125 Hz (EEG
 
 Not ported: Bergen's clipping/NaN handling and baseline correction, and the other
 comparison methods (AAS/OBS/OBS-ICA). Tests: `python -m pytest python`.
+
+## Real data
+```
+pip install -r python/requirements.txt
+python python/run_pipeline.py NB.vhdr out/ --rp rp_run01.txt --exclude 65 66
+```
+Outputs `cwl_corrected_raw.fif`, `cwl_corrected.npz`, `pipeline_log.json`.
+See `docs/PIPELINE.md` for the logic and a pre-flight checklist; the MATLAB version is in `matlab/`.
