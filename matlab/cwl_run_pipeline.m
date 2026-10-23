@@ -23,9 +23,8 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %     .window_s     regression window, s        (default 4)
 %     .delay_s      delay embedding half-width  (default 0.021)
 %
-%   Requires EEGLAB + bva-io (pop_loadbv) and this repository on the path (run
-%   setup_cwl_pipeline first). No toolbox is needed for the pipeline itself; only
-%   cwl_eoec_metrics uses pwelch (Signal Processing Toolbox).
+%   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
+%   this repository on the path (run setup_cwl_pipeline first).
 
 if nargin < 2, opts = struct(); end
 d = @(f, v) setdefault(opts, f, v);
@@ -81,20 +80,10 @@ EEG = eeg_checkset(EEG, 'eventconsistency');
 EEG = pop_saveset(EEG, 'filename', '02_gradient_corrected.set', 'filepath', out_dir);
 
 %% 2. identical zero-phase band-pass on every channel, then resample
-EEG.data = cwl_filter(EEG.data, fs, 'band', band, 3);   % toolbox-free zero-phase Butterworth
-ratio = fs / target_fs;
-if abs(ratio - round(ratio)) < 1e-9
-    % integer decimation; the 125 Hz low-pass above already removes what would alias
-    EEG.data = EEG.data(:, 1:round(ratio):end);
-    for i = 1:numel(EEG.event)
-        EEG.event(i).latency = (EEG.event(i).latency - 1) / ratio + 1;
-    end
-    EEG.srate = target_fs;  EEG.pnts = size(EEG.data, 2);
-    EEG.times = (0:EEG.pnts-1) / target_fs * 1000;  EEG.xmax = EEG.times(end) / 1000;
-    EEG = eeg_checkset(EEG, 'eventconsistency');
-else
-    EEG = pop_resample(EEG, target_fs);                % needs the Signal Processing Toolbox
-end
+[z, p, k] = butter(3, band / (fs / 2), 'bandpass');
+[sos, g]  = zp2sos(z, p, k);
+EEG.data  = filtfilt(sos, g, double(EEG.data).').';
+EEG = pop_resample(EEG, target_fs);              % anti-aliased resample (Signal Processing Toolbox)
 assert(~any(isnan(EEG.data(:))), 'NaN in data before CWL regression');
 EEG = pop_saveset(EEG, 'filename', '03_filtered.set', 'filepath', out_dir);
 

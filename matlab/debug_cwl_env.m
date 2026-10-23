@@ -15,14 +15,13 @@ for i = 1:numel(names)
     end
 end
 t = @(name, f) try_run(name, f);
-t('cwl_filter',   @() cwl_filter(randn(1, 5000), 5000, 'band', [0.33 125], 3));
-t('butter high (not used by the pipeline)',  @() butter(2, 0.01, 'high'));
+t('butter high',  @() butter(2, 0.01, 'high'));
 t('butter band',  @() butter(3, [0.0013 0.5], 'bandpass'));
 t('zp2sos',       @() zp2sos(1, 0.5, 1));
 t('filtfilt',     @() filtfilt(ones(1,2)/2, 1, randn(1000,1)));
-t('pwelch (cwl_eoec_metrics only)', @() pwelch(randn(4000,2), hann_periodic(512), 256, 512, 500));
+t('pwelch', @() pwelch(randn(4000,2), hann_periodic(512), 256, 512, 500));
 t('hann(repo)',   @() hann(9));
-t('resample (not used by the pipeline)', @() resample(randn(1000,1), 1, 10));
+t('resample', @() resample(randn(1000,1), 1, 10));
 t('corrcoef',     @() corrcoef(randn(100, 5)));
 end
 

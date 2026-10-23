@@ -32,12 +32,16 @@ end
 
 idx = starts + (0:L-1);                       % nvol x L sample indices
 out = data;
+if highpass > 0
+    [z, p, k] = butter(2, highpass / (fs / 2), 'high');
+    [sos, g]  = zp2sos(z, p, k);
+end
 
 for c = 1:size(data, 1)
     x  = data(c, :);
     A  = x(idx);                              % nvol x L
     if highpass > 0
-        xf = cwl_filter(x, fs, 'high', highpass, 2);   % toolbox-free zero-phase Butterworth
+        xf = filtfilt(sos, g, x(:)).';
         A2 = xf(idx);
     else
         A2 = A;

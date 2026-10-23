@@ -48,12 +48,3 @@ MATLAB 版只读 rp 文本文件，先转换：`python python/fmriprep_to_rp.py 
 
 对 sub-BOR5A 这个 run：tsv 有 356 行，与 `R128` 数量一致；相邻 volume 的最大平移位移只有 0.293 mm，所以论文的 0.3 mm 阈值下没有任何头动事件，会退化为 moving average。阈值 0.15 mm 有 6 个事件，0.1 mm 有 18 个。
 
-## MATLAB path（只在 setup 报 "still fails after path repair" 时需要）
-`setup_cwl_pipeline` 每次运行会临时补上保存路径里缺失的 MATLAB 自带文件夹。若仍报错，说明 `pathdef.m` 缺得太多，永久修复（先备份）：
-```matlab
-copyfile(which('pathdef'), fullfile(getenv('HOME'), 'pathdef_backup.m'));
-restoredefaultpath; rehash toolboxcache;
-% 重新加入自己的工具箱，例如 addpath('/media/bianca/slurm/Soft/spm12');
-savepath
-```
-如果 `which pathdef` 在 `matlabroot/toolbox/local/` 下，这个 MATLAB 安装可能被多人共用，`savepath` 会影响所有人。

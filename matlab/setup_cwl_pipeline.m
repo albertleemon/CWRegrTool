@@ -6,7 +6,7 @@ function setup_cwl_pipeline(toolbox_dir)
 %
 % Needs git on the system path for the first run (or clone the two repositories
 % yourself into <toolbox_dir>/eeglab and <toolbox_dir>/eeglab/plugins/bva-io).
-% No MATLAB toolbox is required for the pipeline itself.
+% Also needs the Signal Processing Toolbox (butter, filtfilt, resample, pwelch).
 
 here = fileparts(mfilename('fullpath'));
 root = fileparts(here);                              % repo root = CWRegrTool
@@ -22,7 +22,6 @@ if ~exist(bva_dir, 'dir')
     run_git(['clone --depth 1 https://github.com/sccn/bva-io.git "' bva_dir '"']);
 end
 
-heal_matlab_path();
 addpath(eeglab_dir);
 disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
@@ -30,6 +29,7 @@ addpath(bva_dir);                                    % no genpath: it would add 
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
 addpath(here);                                       % this pipeline
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
+check_signal_toolbox();
 fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
 end
 
@@ -55,17 +55,20 @@ if ~strcmp(t, t2)
 end
 end
 
-function heal_matlab_path()
-% The pipeline itself does not need the Signal Processing Toolbox (cwl_filter replaces
-% butter/filtfilt, decimation replaces resample); only cwl_eoec_metrics uses pwelch.
-% On installs whose saved path lacks toolbox/shared/signalwavelet, butter fails with
-% "Unable to resolve signalwavelet.internal.isodd": add that folder back for this session.
-% Nothing else is added (adding toolbox/eml shadowed builtins and did not help).
-if isempty(which('signalwavelet.internal.isodd'))
-    d = fullfile(matlabroot, 'toolbox', 'shared', 'signalwavelet');
-    if exist(d, 'dir')
-        addpath(genpath(d), '-end');
-        fprintf('added missing MATLAB folders under %s\n', d);
-    end
+function check_signal_toolbox()
+% Fail early, with a clear message, if the Signal Processing Toolbox does not work.
+% A failure here means the MATLAB path itself is broken (see docs/RUN_LOCALLY.md).
+assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
+checks = {'butter',   @() butter(2, 0.1, 'high'); ...
+          'filtfilt', @() filtfilt(1, 1, randn(100, 1)); ...
+          'resample', @() resample(randn(100, 1), 1, 10); ...
+          'pwelch',   @() pwelch(randn(1000, 1), 256, 128, 256, 500)};
+bad = {};
+for i = 1:size(checks, 1)
+    try, checks{i, 2}(); catch e, bad{end+1} = sprintf('  %s: %s', checks{i, 1}, e.message); end %#ok<AGROW>
+end
+if ~isempty(bad)
+    error('cwl:signal', 'Signal Processing Toolbox functions fail (MATLAB path broken?):\n%s', ...
+          strjoin(bad, newline));
 end
 end
