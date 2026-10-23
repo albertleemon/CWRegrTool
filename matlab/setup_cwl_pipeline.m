@@ -25,10 +25,12 @@ end
 addpath(eeglab_dir);
 disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
 eeglab nogui;
-addpath(genpath(bva_dir));
+addpath(bva_dir);                                    % no genpath: it would add the .git folders
 addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
 addpath(here);                                       % this pipeline
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
+heal_matlab_path();
+assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
 fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
 end
 
@@ -51,5 +53,23 @@ if ~strcmp(t, t2)
     copyfile(opt, [opt '.bak']);
     fid = fopen(opt, 'w'); fwrite(fid, t2, 'char'); fclose(fid);
     fprintf('EEGLAB online version check disabled in %s (backup: %s.bak)\n', opt, opt);
+end
+end
+
+function heal_matlab_path()
+% A saved pathdef.m can lack MATLAB's own toolbox folders (e.g. toolbox/shared/signalwavelet,
+% which breaks butter/filtfilt with "Unable to resolve signalwavelet.internal.isodd").
+% Compare with MATLAB's default path and append any missing folders under matlabroot.
+old = path;
+def = strsplit(restoredefaultpath, pathsep);    % default path string of this installation
+path(old);                                      % make sure nothing else changed
+cur = strsplit(path, pathsep);
+inroot = def(startsWith(def, matlabroot));
+missing = setdiff(inroot, cur);
+missing = missing(cellfun(@(d) exist(d, 'dir') == 7, missing));
+if ~isempty(missing)
+    addpath(missing{:}, '-end');
+    fprintf('added %d MATLAB folders that were missing from the saved path, e.g. %s\n', ...
+            numel(missing), missing{1});
 end
 end
