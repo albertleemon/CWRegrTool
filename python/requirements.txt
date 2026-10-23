@@ -4,3 +4,4 @@ mne>=1.6
 pytest
 pybv   # only for the tests
 matplotlib
+pymatreader   # mne.io.read_raw_eeglab
