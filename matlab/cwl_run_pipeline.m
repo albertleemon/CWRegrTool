@@ -10,7 +10,8 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %   opts (all optional)
 %     .out_dir      output folder (default: <vhdr folder>/preprocessed)
 %     .marker       volume marker type          (default 'R128')
-%     .rp_file      SPM rp_*.txt; [] -> moving average templates
+%     .rp_file      SPM rp_*.txt or fMRIPrep *_desc-confounds_timeseries.tsv;
+%                   [] -> moving average templates
 %     .cwl_regex    CWL channel labels          (default '^CW')
 %     .ecg_label    ECG channel label           (default 'ECG')
 %     .exclude      cellstr of labels that are neither EEG targets nor CWL
@@ -63,6 +64,7 @@ span = d('span', [0 TR-1]);
 %% 1. gradient artifact on ALL channels (CWL included)
 nvol = numel(onsets);
 if ~isempty(rp_file)
+    rp_file = motion_to_rp(rp_file, out_dir, nvol, threshold);
     [~, W] = m_rp_info(rp_file, nvol, threshold, n_templates);
     method = 'rp_info';
 else
@@ -135,4 +137,26 @@ end
 
 function write_text(f, t)
 fid = fopen(f, 'w', 'n', 'UTF-8'); fwrite(fid, t, 'char'); fclose(fid);
+end
+
+function rp_txt = motion_to_rp(f, out_dir, nvol, threshold)
+% Accept an fMRIPrep confounds .tsv (trans_x..rot_z, mm/rad) as well as an SPM rp file;
+% report how many frame-to-frame translations exceed the threshold.
+if endsWith(f, '.tsv')
+    T  = readtable(f, 'FileType', 'text', 'Delimiter', '\t', 'TreatAsMissing', 'n/a');
+    rp = T{:, {'trans_x', 'trans_y', 'trans_z', 'rot_x', 'rot_y', 'rot_z'}};
+    rp_txt = fullfile(out_dir, 'rp_from_confounds.txt');
+    writematrix(rp, rp_txt, 'Delimiter', ' ', 'FileType', 'text');
+else
+    rp = load(f);  rp_txt = f;
+end
+if size(rp, 1) ~= nvol
+    warning('cwl:rp', '%d motion rows but %d volume markers', size(rp, 1), nvol);
+end
+steps = sqrt(sum(diff(rp(:, 1:3)).^2, 2));
+fprintf('head motion: %d volume steps > %g mm (max step %.3f mm)\n', ...
+        sum(steps > threshold), threshold, max(steps));
+if ~any(steps > threshold)
+    fprintf('  -> no motion events: templates equal moving average; lower opts.threshold to use motion\n');
+end
 end
