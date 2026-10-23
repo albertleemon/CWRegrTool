@@ -27,6 +27,10 @@ ax[1, 0].set(xlabel="s", ylabel="uV", title=f"{m['oz']}, first 10 s"); ax[1, 0].
 k = np.arange(len(m["vr"]))
 ax[1, 1].bar(k - .2, m["vr"], .4, label="CWL"); ax[1, 1].bar(k + .2, m["vrn"], .4, label="null")
 ax[1, 1].set(xlabel="EEG channel #", ylabel="% variance removed", title="variance removed"); ax[1, 1].legend()
+# ignore the near-zero bins at DC (removed by the high-pass) when scaling the y axis
+band = (f > 0.5) & (f <= 125)
+for a, p in ((ax[0, 0], m["p0"]), (ax[0, 1], m["pc"])):
+    a.set_ylim(bottom=0.5 * np.min(p[band]), top=2 * np.max(p[band]))
 fig.tight_layout()
 fig.savefig(d / "diagnostics_py.png", dpi=110)
 print("wrote", d / "diagnostics_py.png")
