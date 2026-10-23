@@ -16,6 +16,7 @@ Example (MATLAB pipeline output of one run, no outside recording yet):
 """
 import argparse
 import re
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -42,12 +43,19 @@ def trimmed_range(set_path):
 
 def load(path, fs_out=500.0, raw_input=False):
     """-> (channel names, data in uV at fs_out)."""
-    import mne
+    try:
+        import mne
+    except ImportError:
+        sys.exit("mne is not installed in this Python environment: "
+                 "pip install -r python/requirements.txt")
     path = Path(path).expanduser()
+    if not path.exists():
+        sys.exit(f"file not found: {path}")
     if path.suffix == ".vhdr":
         from run_pipeline import resolve_header
-        raw = mne.io.read_raw_brainvision(resolve_header(path, path.parent / "_fig3_tmp"),
-                                          preload=True, verbose="error")
+        import tempfile                          # never write next to the raw data
+        tmp = tempfile.mkdtemp(prefix="fig3_")
+        raw = mne.io.read_raw_brainvision(resolve_header(path, tmp), preload=True, verbose="error")
         raw_input = True
     else:
         raw = mne.io.read_raw_eeglab(path, preload=True, verbose="error")
