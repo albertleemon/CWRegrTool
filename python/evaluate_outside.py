@@ -88,11 +88,28 @@ def main():
     print(f"{len(chans)} EEG channels in common" + (f"; not in outside recording: {missing}" if missing else ""))
     print(f"outside: {ox.shape[1] / ofs:.0f} s analysed")
 
+    # Is the "outside" recording really outside the magnet? Carbon-wire loops only pick up
+    # motion inside B0, so outside the scanner their 1-20 Hz power should be far lower.
+    cw_out = [c for c in on if c.upper().startswith("CW")]
+    n03, x03, fs03 = stages["no BCG correction (03)"]
+    cw_in = [c for c in n03 if c.upper().startswith("CW") and c in cw_out]
+    if cw_in:
+        fo_, pco = spectra(on, ox, ofs, cw_in)
+        fi_, pci = spectra(n03, x03, fs03, cw_in)
+        lo = lambda f_, p_: p_[:, (f_ >= 1) & (f_ <= 20)].mean()
+        ratio = float(lo(fo_, pco) / lo(fi_, pci))
+        print(f"CWL 1-20 Hz power outside/inside: {ratio:.4f}"
+              + ("  -> looks like a recording OUTSIDE the magnet" if ratio < 0.05 else
+                 "  -> WARNING: loops still see motion; this may be INSIDE the magnet (no scanning)"))
+    else:
+        ratio = None
+
     f, po = spectra(on, ox, ofs, chans)
     b = (f >= 0.5) & (f <= 125)
     alpha = (f >= 8) & (f <= 13)
     topo_out = po[:, alpha].mean(1)
-    res = {"n_channels": len(chans), "outside_seconds": ox.shape[1] / ofs, "stages": {}}
+    res = {"n_channels": len(chans), "outside_seconds": ox.shape[1] / ofs,
+           "cwl_power_1_20Hz_outside_over_inside": ratio, "stages": {}}
     spec = {}
     for name, (n, x, fs) in stages.items():
         _, p = spectra(n, x, fs, chans)
