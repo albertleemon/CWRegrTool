@@ -2,14 +2,17 @@
 
 Tests on the pipeline output (03_filtered.set = before CWL, 04_cwl_corrected.set = after):
 
- 1. Volume locking. A residual of the MRI gradient artifact repeats with every volume
-    (R128 marker), a helium-pump/vibration artifact does not. The data are cut into
-    volume epochs; the volume-locked part (mean over all volumes, and a local mean over
-    25 neighbouring volumes as in the gradient correction) is subtracted and the
-    peaks are measured again. Peaks that vanish -> scanner-locked (gradient residual).
- 2. Fine structure. A volume-locked signal only has power on multiples of 1/TR. A
-    high-resolution spectrum (18 s segments, 0.056 Hz) around each peak is plotted
-    with the 1/TR grid.
+ 1. Volume locking. The data are cut into volume epochs and the volume-locked mean (all
+    volumes, and a local 25-volume mean) is subtracted again. NOTE: 03_filtered has already
+    had a 25-volume template removed, so what is left is by construction the volume-to-
+    volume VARIATION of the artifact, whose mean is ~0. A second mean subtraction can
+    therefore NOT remove a gradient residual here; this test only shows whether a common,
+    stable residual is left over (e.g. from a template that was too short or misaligned).
+ 2. Fine structure. Anything that repeats with the volumes (gradient artifact and its
+    volume-to-volume variation) has its power on multiples of 1/TR; helium pump or
+    other vibration does not. A high-resolution spectrum (18 s segments, 0.056 Hz)
+    around each peak is plotted with the 1/TR grid. With --bold the slice frequency is
+    computed from SliceTiming and compared with the peak spacing.
  3. Time course and topography of the peak power (per volume, per channel), plus
     correlation with head motion if an fMRIPrep confounds.tsv is given.
 
@@ -75,6 +78,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_dir")
     ap.add_argument("--confounds")
+    ap.add_argument("--bold", help="BIDS *_bold.json (SliceTiming) to compute the slice frequency")
     ap.add_argument("--fmin", type=float, default=40, help="look for peaks above this frequency")
     a = ap.parse_args()
     d = Path(a.out_dir).expanduser()
@@ -97,6 +101,11 @@ def main():
     f0 = np.median(pk / np.round(pk / np.median(np.diff(pk)))) if len(pk) > 1 else np.nan
     print("peaks (Hz):", np.round(pk, 2), f"-> spacing ~ {f0:.3f} Hz")
 
+    if a.bold:
+        st = np.sort(json.loads(Path(a.bold).read_text())["SliceTiming"])
+        slice_hz = 1 / np.diff(st).mean()
+        print(f"slice frequency from SliceTiming: {slice_hz:.3f} Hz ({len(st)} slices)")
+
     # --- 2. remove the volume-locked part -----------------------------------------
     y_all, _ = subtract_locked(x, on, tr)
     y_loc, _ = subtract_locked(x, on, tr, k=25)
@@ -105,6 +114,7 @@ def main():
     p_pre, p_all, p_loc = spec(x), spec(y_all), spec(y_loc)
     res = {"peak_hz": [round(float(v), 2) for v in pk],
            "harmonic_spacing_hz": round(float(f0), 3), "tr_s": tr / fs,
+           "slice_frequency_hz": round(float(slice_hz), 3) if a.bold else None,
            "height_db_before": peak_heights(f, p_pre, pk),
            "height_db_minus_volume_locked_mean": peak_heights(f, p_all, pk),
            "height_db_minus_volume_locked_25": peak_heights(f, p_loc, pk)}
