@@ -11,6 +11,8 @@ part with the participant entering the scanner.
 
 Metrics per stage:
   spectral_distance_pct   eq. 4 on the channel-mean spectrum, 0.5-125 Hz (linear power)
+  spectral_distance_1_30Hz_pct  the same on 1-30 Hz only (above 30 Hz an unshielded
+                          outside recording usually carries more line/EMG noise)
   band_diff_db            10*log10(inside/outside) of the channel-mean band power
   alpha_topo_distance_pct eq. 6 on the per-channel alpha (8-13 Hz) power, after scaling
                           both topographies to unit sum (shape, not amplitude)
@@ -117,6 +119,8 @@ def main():
         topo_in = p[:, alpha].mean(1)
         res["stages"][name] = dict(
             spectral_distance_pct=relative_distance(p.mean(0)[b], po.mean(0)[b]),
+            spectral_distance_1_30Hz_pct=relative_distance(p.mean(0)[(f >= 1) & (f <= 30)],
+                                                           po.mean(0)[(f >= 1) & (f <= 30)]),
             per_channel_spectral_distance_pct_median=float(np.median(
                 [relative_distance(p[i, b], po[i, b]) for i in range(len(chans))])),
             band_diff_db={f"{lo}-{hi}": float(10 * np.log10(p.mean(0)[(f >= lo) & (f < hi)].mean() /
