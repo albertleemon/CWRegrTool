@@ -1,9 +1,10 @@
 function EEG = cwl_run_pipeline(vhdr, opts)
 % CWL_RUN_PIPELINE  Offline EEG-fMRI preprocessing with carbon-wire loops.
 %
-%   BrainVision -> gradient-artifact correction (all channels incl. CWL)
-%   -> band-pass 0.33-125 Hz (all channels) -> resample to 500 Hz
-%   -> CWL windowed regression (EEG channels only) -> saved .set
+%   BrainVision -> 02 gradient-artifact template subtraction (all channels incl. CWL)
+%   -> 02b optional OBS removal of the gradient residual (opts.obs_npc > 0)
+%   -> 03 band-pass 0.33-125 Hz (all channels) + resample to 500 Hz
+%   -> 04 CWL windowed regression (EEG channels only); every stage is saved as .set
 %
 %   EEG = cwl_run_pipeline('D:\data\NB.vhdr', opts)
 %
@@ -25,6 +26,7 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %     .delay_s      delay embedding half-width  (default 0.021)
 %     .obs_npc      FASTR residual PCA components after the gradient template
 %                   (Niazy 2005), 0 = off (default), e.g. 4; not part of the paper
+%     .obs_hp       high-pass (Hz) of the residual for the OBS fit (default 70)
 %
 %   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
 %   this repository on the path (run setup_cwl_pipeline first).
@@ -45,6 +47,7 @@ target_fs   = d('target_fs', 500);
 window_s    = d('window_s', 4);
 delay_s     = d('delay_s', 0.021);
 obs_npc     = d('obs_npc', 0);
+obs_hp      = d('obs_hp', 70);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
@@ -74,19 +77,29 @@ else
     W = m_moving_average(nvol, n_templates);
     method = 'moving_average';
 end
-[data, obs_frac] = cwl_gradient_correct(EEG.data, fs, onsets, span(1), span(2), W, [], [], obs_npc);
-if obs_npc > 0
-    fprintf('OBS residual removal (%d components): median %.0f%% of the >70 Hz residual removed\n', ...
-            obs_npc, 100 * median(obs_frac));
-end
+data = cwl_gradient_correct(EEG.data, fs, onsets, span(1), span(2), W);
 a = onsets(1) + span(1);  b = onsets(end) + span(2);   % outside this: not corrected
-EEG.data = data(:, a:b);
+EEG.data = data(:, a:b);  clear data
 EEG.pnts  = size(EEG.data, 2);
 EEG.times = (0:EEG.pnts-1) / fs * 1000;  EEG.xmax = EEG.times(end) / 1000;
 EEG.event = EEG.event([EEG.event.latency] >= a & [EEG.event.latency] <= b);
 for i = 1:numel(EEG.event), EEG.event(i).latency = EEG.event(i).latency - a + 1; end
 EEG = eeg_checkset(EEG, 'eventconsistency');
 EEG = pop_saveset(EEG, 'filename', '02_gradient_corrected.set', 'filepath', out_dir);
+
+%% 1b. optional: OBS removal of the gradient residual (Niazy et al. 2005), all channels
+obs_frac = [];
+if obs_npc > 0
+    idx = (onsets(:) - a + 1 + span(1)) + (0:span(2)-span(1));   % volume epochs in the cut data
+    obs_frac = zeros(EEG.nbchan, 1);
+    for c = 1:EEG.nbchan
+        [y, obs_frac(c)] = cwl_obs_residual(double(EEG.data(c, :)), fs, idx, obs_npc, obs_hp);
+        EEG.data(c, :) = y;
+    end
+    fprintf('OBS residual removal (%d components, >%g Hz): median %.0f%% of the residual removed\n', ...
+            obs_npc, obs_hp, 100 * median(obs_frac));
+    EEG = pop_saveset(EEG, 'filename', '02b_obs_corrected.set', 'filepath', out_dir);
+end
 
 %% 2. identical zero-phase band-pass on every channel, then resample
 [z, p, k] = butter(3, band / (fs / 2), 'bandpass');
@@ -106,7 +119,7 @@ changed = find(any(EEG.data(eeg_idx, :) ~= before, 1));
 fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
 EEG = pop_select(EEG, 'point', [changed(1) changed(end)]);
 
-EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'n_volumes', nvol, 'tr_samples', TR, ...
+EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_frac', obs_frac, 'n_volumes', nvol, 'tr_samples', TR, ...
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
     'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
 EEG = pop_saveset(EEG, 'filename', '04_cwl_corrected.set', 'filepath', out_dir);

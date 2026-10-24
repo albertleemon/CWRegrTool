@@ -57,3 +57,20 @@ MATLAB 版只读 rp 文本文件，先转换：`python python/fmriprep_to_rp.py 
 CWL_OBS=4 ./matlab/run_headless.sh "$IN" $OUT/ma_obs4 65,66          # MATLAB
 python python/run_pipeline.py "$IN" $OUT/py_obs4 --exclude 65 66 --obs-npc 4   # Python
 ```
+
+
+## 完整流程一条命令（推荐）
+```
+export MATLAB_BIN=/media/bianca/slurm/Matlab/R2024b/bin/matlab
+conda activate cwl            # 或你装了依赖的 Python 环境
+./run_subject.sh RAW.vhdr OUT_DIR 65,66            # 默认含 OBS（CWL_OBS=4）
+```
+| 阶段 | 文件 | 方法 |
+|---|---|---|
+| 02 梯度模板减法（5000 Hz，全部通道） | `02_gradient_corrected.set` | Allen 2000；有头动参数时 Moosmann 2009 |
+| 02b OBS 残差去除（5000 Hz，全部通道） | `02b_obs_corrected.set` | Niazy 2005（FASTR 的 OBS），70 Hz 以上 |
+| 03 带通 0.33–125 Hz + 500 Hz | `03_filtered.set` | van der Meer 2016 |
+| 04 CWL 回归（EEG 通道） | `04_cwl_corrected.set` ← 最终结果 | van der Meer 2016 |
+
+诊断：`stage_spectra.png`（原始、02、02b、04、随机相位 CWL 对照的平均谱）、`diagnostics_py.png`、`diagnostics.json`、`residual_peaks.png/json`。
+磁盘：02 和 02b 各约 1 GB（5000 Hz），确认结果后可删除。
