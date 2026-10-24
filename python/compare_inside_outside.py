@@ -35,6 +35,7 @@ def main():
     ap.add_argument("--channels", nargs="+", default=["Fz", "Cz", "Pz", "Oz", "O1", "O2"])
     ap.add_argument("--start", type=float, default=60.0, help="start of the example traces (s)")
     ap.add_argument("--seconds", type=float, default=10.0)
+    ap.add_argument("--also", help="a second inside stage (e.g. 03_filtered.set) for the per-channel table")
     a = ap.parse_args()
 
     ins = mne.io.read_raw_eeglab(Path(a.inside).expanduser(), preload=True, verbose="error")
@@ -80,7 +81,29 @@ def main():
         w = (f >= lo) & (f < hi)
         vi, vo = pi.mean(0)[w].mean(), po.mean(0)[w].mean()
         print(f"{lo:>4}-{hi:<5} {vi:10.3g} {vo:10.3g} {10 * np.log10(vi / vo):+8.1f}")
-    print("wrote", a.out_png)
+    # per-channel amplitude, 1-30 Hz (above 30 Hz the outside recording carries extra noise)
+    def rms_1_30(names, x):
+        ff, pp = welch(pick(names, x, chans), fi, nperseg=int(4 * fi), axis=-1)
+        w = (ff >= 1) & (ff <= 30)
+        return np.sqrt(pp[:, w].sum(1) * (ff[1] - ff[0]))
+    r_in, r_out = rms_1_30(ins.ch_names, xi), rms_1_30(out.ch_names, xo)
+    cols = {"inside": r_in}
+    if a.also:
+        al = mne.io.read_raw_eeglab(Path(a.also).expanduser(), preload=True, verbose="error")
+        cols[Path(a.also).stem] = rms_1_30(al.ch_names, al.get_data() * 1e6)
+    ratio = r_in / r_out
+    rel = ratio / np.median(ratio)                     # 1 = same inside/outside ratio as a typical channel
+    rows = ["channel,outside_rms_uV," + ",".join(f"{k}_rms_uV" for k in cols) + ",inside_over_outside,relative_to_median"]
+    for i in np.argsort(rel):
+        rows.append(f"{chans[i]},{r_out[i]:.2f}," + ",".join(f"{v[i]:.2f}" for v in cols.values())
+                    + f",{ratio[i]:.3f},{rel[i]:.3f}")
+    csv = Path(a.out_png).with_suffix(".channels.csv")
+    csv.write_text("\n".join(rows) + "\n")
+    print("\nper-channel RMS 1-30 Hz (µV); relative_to_median < 1 = smaller inside than expected")
+    print(rows[0])
+    for line in rows[1:9] + ["..."] + rows[-4:]:
+        print(line)
+    print("wrote", a.out_png, "and", csv)
 
 
 if __name__ == "__main__":
