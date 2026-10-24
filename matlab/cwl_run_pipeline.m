@@ -28,9 +28,9 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %                   (Niazy 2005), 0 = off (default), e.g. 4; not part of the paper
 %     .obs_hp       high-pass (Hz) of the residual for the OBS fit (default 70; e.g. 60 to
 %                   also treat the 67 Hz harmonic)
-%     .cwl_lowpass  low-pass (Hz) applied to the CWL regressors only, before the regression
-%                   (default 0 = off, e.g. 90): the regression then cannot add loop noise
-%                   above that frequency, but also cannot remove artifacts above it
+%     .cwl_lowpass  low-pass (Hz) of the ESTIMATED CWL artifact before it is subtracted
+%                   (default 0 = off, e.g. 90): above that frequency the EEG stays exactly
+%                   as before the regression (no loop noise added, nothing removed)
 %
 %   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
 %   this repository on the path (run setup_cwl_pipeline first).
@@ -116,19 +116,22 @@ EEG = pop_saveset(EEG, 'filename', '03_filtered.set', 'filepath', out_dir);
 
 %% 3. CWL regression (EEG channels only), original CWRegrTool code
 before = EEG.data(eeg_idx, :);
-cwl_orig = EEG.data(cwl_idx, :);
-if cwl_lowpass > 0                                  % regressors only; EEG is not filtered
-    [z, p, k] = butter(8, cwl_lowpass / (EEG.srate / 2), 'low');   % steep, zero phase
-    [sos, g]  = zp2sos(z, p, k);
-    EEG.data(cwl_idx, :) = cwl_sosfiltfilt(sos, g, double(EEG.data(cwl_idx, :)).').';
-    fprintf('CWL regressors low-passed at %g Hz before the regression\n', cwl_lowpass);
-end
 EEG = pop_cwregression(EEG, EEG.srate, window_s, delay_s, 1, 'hann', ...
                        cwl_idx, eeg_idx, 'taperedhann', 0);
-EEG.data(cwl_idx, :) = cwl_orig;                    % keep the original loop signals in the output
 % the tool leaves the first ~half window and last ~1-3 windows uncorrected:
-% keep only the samples it actually changed
+% keep only the samples it actually changed (determined before any artifact low-pass,
+% which would smear tiny values into the uncorrected edges)
 changed = find(any(EEG.data(eeg_idx, :) ~= before, 1));
+if cwl_lowpass > 0
+    % low-pass the artifact estimate, not the regressors: low-passing the regressors
+    % makes the lagged fit ill-conditioned and amplifies the transition band
+    [z, p, k] = butter(8, cwl_lowpass / (EEG.srate / 2), 'low');   % steep, zero phase
+    [sos, g]  = zp2sos(z, p, k);
+    art = double(before) - double(EEG.data(eeg_idx, :));
+    art = cwl_sosfiltfilt(sos, g, art.').';
+    EEG.data(eeg_idx, :) = double(before) - art;
+    fprintf('CWL artifact estimate low-passed at %g Hz before subtraction\n', cwl_lowpass);
+end
 fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
 EEG = pop_select(EEG, 'point', [changed(1) changed(end)]);
 

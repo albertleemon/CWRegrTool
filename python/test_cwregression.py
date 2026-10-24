@@ -59,10 +59,10 @@ def test_unrelated_regressors_do_limited_damage():
     assert rmse(out, bandpass(brain, fs)) < 0.5 * np.std(bandpass(brain, fs))
 
 
-def test_cwl_lowpass_keeps_loop_noise_out_of_high_frequencies():
+def test_artifact_lowpass_keeps_loop_noise_out_of_high_frequencies():
     """Loops carry their own noise at 115 Hz. Without the regressor low-pass the
-    regression adds some of it to the EEG; with a 90 Hz low-pass the EEG above
-    100 Hz stays at the level of the clean signal."""
+    regression adds some of it to the EEG; with a 90 Hz low-pass of the artifact
+    estimate the EEG above 100 Hz stays at the level of the clean signal."""
     from scipy.signal import welch
     fs, brain, art, cwl = synth()
     rng = np.random.default_rng(5)
@@ -74,7 +74,7 @@ def test_cwl_lowpass_keeps_loop_noise_out_of_high_frequencies():
     lo = (f >= 0.5) & (f < 20)
     r = {}
     for lp in (None, 90):
-        _, p = welch(cw_regression(brain + art, cwl, fs, filter_band=None, cwl_lowpass=lp), fs, nperseg=fs)
+        _, p = welch(cw_regression(brain + art, cwl, fs, filter_band=None, artifact_lowpass=lp), fs, nperseg=fs)
         r[lp] = (p[:, hi].sum() / p_clean[:, hi].sum(), p[:, lo].sum() / p_clean[:, lo].sum())
     print("vs clean EEG (100-125 Hz, 0.5-20 Hz):", r)
     assert r[None][0] > r[90][0]               # the low-pass keeps loop noise out

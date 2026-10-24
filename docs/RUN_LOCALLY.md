@@ -81,10 +81,10 @@ conda activate cwl            # 或你装了依赖的 Python 环境
 |---|---|---|
 | `CWL_OBS` | 4 | OBS 主成分个数；0 = 跳过 OBS |
 | `CWL_OBS_HP` | 70 | OBS 只拟合该频率以上的残差；60 可同时处理 67 Hz 谐波 |
-| `CWL_LOWPASS` | 关 | 回归前只对碳线环信号做低通（8 阶，零相位），例如 90：回归不再把环路自身的高频噪声带进 EEG，但该频率以上的伪影也不再被去除 |
+| `CWL_LOWPASS` | 关 | 对 CWL 回归**估计出的伪影**做低通（8 阶，零相位）后再从 EEG 中减去，例如 90：90 Hz 以上 EEG 保持回归前（OBS 后）的样子，不带进环路噪声，也不去除该频段伪影。（v1 曾对碳线环信号本身低通，会使带延迟的回归在过渡带放大噪声，已弃用） |
 | `CWL_RP` | 无 | SPM rp 文件或 fMRIPrep confounds.tsv，用于头动信息模板 |
 | `CWL_THRESHOLD` | 0.3 | 头动阈值（mm） |
 
 例：`CWL_OBS_HP=60 CWL_LOWPASS=90 ./run_subject.sh RAW.vhdr OUT 65,66`
 每次运行的设置写在 `OUT/settings.txt`，也记录在 `04_cwl_corrected.set` 的 `EEG.etc.cwl_pipeline` 里。
-Python 版对应：`--obs-npc`、`--obs-hp`、`--cwl-lowpass`。
+Python 版对应：`--obs-npc`、`--obs-hp`、`--artifact-lowpass`。

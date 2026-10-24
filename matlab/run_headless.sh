@@ -7,7 +7,7 @@
 #   CWL_THRESHOLD  head-motion threshold in mm (default 0.3)
 #   CWL_OBS        FASTR residual PCA components after the gradient template (0 = off, e.g. 4)
 #   CWL_OBS_HP     high-pass (Hz) of the residual for OBS (default 70, e.g. 60)
-#   CWL_LOWPASS    low-pass (Hz) of the CWL regressors before the regression (default off, e.g. 90)
+#   CWL_LOWPASS    low-pass (Hz) of the estimated CWL artifact before subtraction (default off, e.g. 90)
 # Log: <out_dir>/matlab_run.log ; non-zero exit code on error.
 set -euo pipefail
 VHDR="$1"; OUT="$2"; EXCL="${3:-65,66}"

@@ -17,8 +17,8 @@
 #   PYTHON         Python with numpy/scipy/mne/pymatreader/matplotlib (default: python)
 #   CWL_OBS        OBS components (default 4; 0 = skip the OBS stage)
 #   CWL_OBS_HP     high-pass (Hz) of the residual for OBS (default 70; 60 also treats the 67 Hz harmonic)
-#   CWL_LOWPASS    low-pass (Hz) of the CWL regressors only (default off; e.g. 90 keeps the
-#                  regression from adding loop noise above 90 Hz, but it then removes nothing there)
+#   CWL_LOWPASS    low-pass (Hz) of the estimated CWL artifact before subtraction (default off;
+#                  e.g. 90: above 90 Hz the EEG stays as after OBS - no loop noise added, nothing removed)
 #   CWL_RP         SPM rp_*.txt or fMRIPrep confounds .tsv (default: moving-average templates)
 #   CWL_THRESHOLD  head-motion threshold in mm (default 0.3)
 set -euo pipefail
