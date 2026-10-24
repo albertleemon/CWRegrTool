@@ -120,8 +120,33 @@ def rp_weighting_matrix(rp, n_vol, threshold=0.3, k=25):
     return W
 
 
+def obs_residual(x, fs, idx, npc=4, hp=70.0, exclude_factor=100.0):
+    """Optimal-basis-set removal of the gradient residual (Niazy et al. 2005, FASTR).
+
+    x : one channel after template subtraction; idx : (n_vol, L) sample indices.
+    The residual is high-passed at `hp` Hz, the volume epochs are decomposed with PCA
+    and the first `npc` components are fitted to and subtracted from every volume.
+    Only the high-passed residual is fitted, so content below ~hp Hz (EEG rhythms)
+    is not touched. Volumes whose residual power exceeds `exclude_factor` x the median
+    (e.g. an incomplete last volume) do not enter the PCA but are still corrected.
+    Returns the corrected channel and the fraction of high-pass residual variance removed.
+    """
+    if npc <= 0:
+        return x, 0.0
+    sos = butter(4, hp, btype="high", fs=fs, output="sos")
+    R = sosfiltfilt(sos, x)[idx]                                  # (n_vol, L)
+    pw = (R ** 2).mean(1)
+    use = pw <= exclude_factor * np.median(pw)
+    _, _, Vt = np.linalg.svd(R[use] - R[use].mean(0), full_matrices=False)
+    B = Vt[:npc]                                                  # (npc, L), orthonormal rows
+    fit = (R @ B.T) @ B
+    y = x.copy()
+    y[idx] -= fit
+    return y, float(1 - ((R - fit) ** 2).sum() / (R ** 2).sum())
+
+
 def gradient_correct(eeg, fs, onsets, offset_pre, offset_post, W,
-                     highpass=1.0, corr_thresh=2.5):
+                     highpass=1.0, corr_thresh=2.5, obs_npc=0, obs_hp=70.0):
     """Average-artifact subtraction with a weighting matrix.
 
     eeg : (n_chan, n_samples); all channels, including CWL, should be passed.
@@ -133,6 +158,8 @@ def gradient_correct(eeg, fs, onsets, offset_pre, offset_post, W,
     out of the templates); templates whose dissimilarity to the others exceeds
     `corr_thresh` x the median are dropped. Samples outside the spans are left
     untouched (and therefore still contain gradient artifacts).
+    obs_npc > 0 adds the FASTR optimal-basis-set step (see obs_residual) after the
+    template subtraction; it is not part of van der Meer et al. (2016).
     """
     eeg = np.asarray(eeg, float)
     onsets = np.asarray(onsets, int)
@@ -158,4 +185,6 @@ def gradient_correct(eeg, fs, onsets, offset_pre, offset_post, W,
                 if bad.any() and not bad.all():
                     sel = sel[~bad]
             out[c][idx[i]] = A[i] - A2[sel].mean(0)
+        if obs_npc:
+            out[c], _ = obs_residual(out[c], fs, idx, obs_npc, obs_hp)
     return out

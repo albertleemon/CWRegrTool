@@ -59,7 +59,7 @@ def resolve_header(vhdr, out_dir):
 
 def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         exclude=(), n_templates=25, threshold=0.3, span=None,
-        band=(0.33, 125.0), target_fs=500, window_s=4.0, delay_s=0.021):
+        band=(0.33, 125.0), target_fs=500, window_s=4.0, delay_s=0.021, obs_npc=0):
     import mne
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -104,7 +104,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         method = "moving_average"
     if onsets[-1] + post >= data.shape[1]:
         raise SystemExit("last artifact exceeds the recording: drop the last marker or trim")
-    data = gradient_correct(data, fs, onsets, pre, post, W)
+    data = gradient_correct(data, fs, onsets, pre, post, W, obs_npc=obs_npc)
 
     # data outside the corrected span still contains gradient artifacts -> cut it
     a, b = onsets[0] + pre, onsets[-1] + post + 1
@@ -133,7 +133,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
                         eeg_idx=eeg_idx, cwl_idx=cwl_idx, artifact=art,
                         pre_cwl=pre_cwl)
     (out_dir / "pipeline_log.json").write_text(json.dumps(dict(
-        vhdr=str(vhdr), method=method, n_volumes=len(onsets), tr_samples=tr,
+        vhdr=str(vhdr), method=method, obs_npc=obs_npc, n_volumes=len(onsets), tr_samples=tr,
         span=[pre, post], n_templates=n_templates, threshold_mm=threshold, band=band,
         fs_out=fs, window_s=window_s, delay_s=delay_s,
         motion_events=(n_events if rp is not None else None),
@@ -155,6 +155,9 @@ if __name__ == "__main__":
     p.add_argument("--span", type=int, nargs=2, metavar=("PRE", "POST"),
                    help="artifact span in samples relative to the marker (default 0 TR-1)")
     p.add_argument("--target-fs", type=float, default=500)
+    p.add_argument("--obs-npc", type=int, default=0,
+                   help="FASTR residual PCA after the gradient template (Niazy 2005); 0 = off, e.g. 4")
     a = p.parse_args()
     run(a.vhdr, a.out_dir, a.rp, a.marker, a.cwl_regex, a.ecg, a.exclude, a.templates,
-        a.threshold, tuple(a.span) if a.span else None, target_fs=a.target_fs)
+        a.threshold, tuple(a.span) if a.span else None, target_fs=a.target_fs,
+        obs_npc=a.obs_npc)

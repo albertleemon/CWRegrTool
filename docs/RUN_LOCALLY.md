@@ -48,3 +48,12 @@ MATLAB 版只读 rp 文本文件，先转换：`python python/fmriprep_to_rp.py 
 
 对 sub-BOR5A 这个 run：tsv 有 356 行，与 `R128` 数量一致；相邻 volume 的最大平移位移只有 0.293 mm，所以论文的 0.3 mm 阈值下没有任何头动事件，会退化为 moving average。阈值 0.15 mm 有 6 个事件，0.1 mm 有 18 个。
 
+
+## 可选：梯度残余的 OBS 去除（Niazy 2005，FASTR）
+梯度模板减法之后，若高频仍有层频率谐波残峰（例如 sub-BOR5A 的 84.5、101、117.75 Hz），可加残差 PCA：
+对每个通道，把模板减法后的残差高通到 70 Hz，按 volume 做 PCA，去掉前 N 个主成分。只拟合 70 Hz 以上的残差，40 Hz 以下的脑电不受影响。
+**这一步不在 van der Meer et al. (2016) 的方法里，默认关闭；使用时请在方法部分注明 Niazy et al. (2005)。**
+```
+CWL_OBS=4 ./matlab/run_headless.sh "$IN" $OUT/ma_obs4 65,66          # MATLAB
+python python/run_pipeline.py "$IN" $OUT/py_obs4 --exclude 65 66 --obs-npc 4   # Python
+```

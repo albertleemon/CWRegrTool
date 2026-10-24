@@ -79,3 +79,35 @@ def test_load_fmriprep_tsv(tmp_path):
     p.write_text("\n".join(rows) + "\n")
     rp = load_motion(p)
     assert rp.shape == (2, 6) and abs(motion_steps(rp)[0] - 0.5) < 1e-12
+
+
+def test_obs_removes_shape_changes_but_keeps_alpha():
+    """Artifact whose high-frequency shape changes in some volumes: the 25-volume
+    template leaves a residual, the OBS step removes most of it, alpha stays."""
+    from gradient_correction import gradient_correct, moving_average_matrix
+    from scipy.signal import welch
+    fs, L, nv = 5000, 9000, 80
+    rng = np.random.default_rng(3)
+    n = L * (nv + 2)
+    t = np.arange(n) / fs
+    brain = 20 * np.sin(2 * np.pi * 10.3 * t + 1) + rng.normal(scale=2, size=n)
+    tt = np.arange(L) / fs
+    base = sum(np.sin(2 * np.pi * 16.84 * k * tt) for k in range(4, 9)) * 300
+    alt = sum(np.sin(2 * np.pi * 16.84 * k * tt + 0.4) for k in range(4, 9)) * 300
+    x = brain.copy()
+    on = L + L * np.arange(nv)
+    for i, o in enumerate(on):
+        w = 0.6 + 0.4 * np.cos(2 * np.pi * i / 17)           # slowly changing shape mix
+        x[o:o + L] += w * base + (1 - w) * alt
+    W = moving_average_matrix(nv, 25)
+    sl = slice(on[0], on[-1] + L)
+    f, _ = welch(x[sl], fs, nperseg=fs)
+    band = lambda y, lo, hi: welch(y[sl], fs, nperseg=fs)[1][(f >= lo) & (f <= hi)].mean()
+    a0 = gradient_correct(x[None], fs, on, 0, L - 1, W)[0]
+    a4 = gradient_correct(x[None], fs, on, 0, L - 1, W, obs_npc=4)[0]
+    hf0, hf4, hfb = band(a0, 65, 160), band(a4, 65, 160), band(brain, 65, 160)
+    al0, al4 = band(a0, 9, 12), band(a4, 9, 12)
+    print("65-160 Hz power: template only %.3g, +OBS %.3g, clean %.3g; alpha ratio %.3f"
+          % (hf0, hf4, hfb, al4 / al0))
+    assert hf4 < 0.1 * hf0
+    assert abs(al4 / al0 - 1) < 0.01

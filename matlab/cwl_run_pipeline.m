@@ -23,6 +23,8 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %     .target_fs    sampling rate for regression (default 500)
 %     .window_s     regression window, s        (default 4)
 %     .delay_s      delay embedding half-width  (default 0.021)
+%     .obs_npc      FASTR residual PCA components after the gradient template
+%                   (Niazy 2005), 0 = off (default), e.g. 4; not part of the paper
 %
 %   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
 %   this repository on the path (run setup_cwl_pipeline first).
@@ -42,6 +44,7 @@ band        = d('band', [0.33 125]);
 target_fs   = d('target_fs', 500);
 window_s    = d('window_s', 4);
 delay_s     = d('delay_s', 0.021);
+obs_npc     = d('obs_npc', 0);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
@@ -71,7 +74,11 @@ else
     W = m_moving_average(nvol, n_templates);
     method = 'moving_average';
 end
-data = cwl_gradient_correct(EEG.data, fs, onsets, span(1), span(2), W);
+[data, obs_frac] = cwl_gradient_correct(EEG.data, fs, onsets, span(1), span(2), W, [], [], obs_npc);
+if obs_npc > 0
+    fprintf('OBS residual removal (%d components): median %.0f%% of the >70 Hz residual removed\n', ...
+            obs_npc, 100 * median(obs_frac));
+end
 a = onsets(1) + span(1);  b = onsets(end) + span(2);   % outside this: not corrected
 EEG.data = data(:, a:b);
 EEG.pnts  = size(EEG.data, 2);
@@ -99,7 +106,7 @@ changed = find(any(EEG.data(eeg_idx, :) ~= before, 1));
 fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
 EEG = pop_select(EEG, 'point', [changed(1) changed(end)]);
 
-EEG.etc.cwl_pipeline = struct('method', method, 'n_volumes', nvol, 'tr_samples', TR, ...
+EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'n_volumes', nvol, 'tr_samples', TR, ...
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
     'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
 EEG = pop_saveset(EEG, 'filename', '04_cwl_corrected.set', 'filepath', out_dir);

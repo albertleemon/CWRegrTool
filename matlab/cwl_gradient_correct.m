@@ -1,4 +1,4 @@
-function out = cwl_gradient_correct(data, fs, onsets, pre, post, W, highpass, corr_thresh)
+function [out, obs_frac] = cwl_gradient_correct(data, fs, onsets, pre, post, W, highpass, corr_thresh, obs_npc, obs_hp)
 % CWL_GRADIENT_CORRECT  Average-artifact subtraction with a weighting matrix.
 %
 %   out = cwl_gradient_correct(data, fs, onsets, pre, post, W)
@@ -12,12 +12,17 @@ function out = cwl_gradient_correct(data, fs, onsets, pre, post, W, highpass, co
 %   W       nvol x nvol weighting matrix; row i selects the templates for volume i
 %   highpass (default 1 Hz) templates are built from a high-passed copy
 %   corr_thresh (default 2.5) templates with dissimilarity > thresh*median are dropped
+%   obs_npc  (default 0 = off) FASTR residual PCA after the template subtraction
+%            (Niazy et al. 2005, see cwl_obs_residual); not part of van der Meer 2016
+%   obs_hp   (default 70 Hz) high-pass of the residual for that PCA
 %
 %   Samples outside the corrected spans are returned unchanged (they still
 %   contain gradient artifacts) -- trim them afterwards.
 
 if nargin < 7 || isempty(highpass),    highpass = 1;     end
 if nargin < 8 || isempty(corr_thresh), corr_thresh = 2.5; end
+if nargin < 9 || isempty(obs_npc),     obs_npc = 0;      end
+if nargin < 10 || isempty(obs_hp),     obs_hp = 70;      end
 
 data   = double(data);
 onsets = round(onsets(:));
@@ -32,6 +37,7 @@ end
 
 idx = starts + (0:L-1);                       % nvol x L sample indices
 out = data;
+obs_frac = zeros(size(data, 1), 1);
 if highpass > 0
     [z, p, k] = butter(2, highpass / (fs / 2), 'high');
     [sos, g]  = zp2sos(z, p, k);
@@ -58,6 +64,9 @@ for c = 1:size(data, 1)
             end
         end
         out(c, idx(i, :)) = A(i, :) - mean(A2(sel, :), 1);
+    end
+    if obs_npc > 0
+        [out(c, :), obs_frac(c)] = cwl_obs_residual(out(c, :), fs, idx, obs_npc, obs_hp);
     end
 end
 end
