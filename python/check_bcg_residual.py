@@ -24,12 +24,26 @@ from cwregression import bandpass
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
 
 
-def r_peaks(ecg, fs):
-    """R-peak sample indices (band-pass 5-30 Hz, polarity from the largest deflections)."""
-    y = sosfiltfilt(butter(3, [5, 30], "band", fs=fs, output="sos"), ecg)
-    if np.percentile(-y, 99.9) > np.percentile(y, 99.9):
-        y = -y
-    pk, _ = find_peaks(y, height=0.5 * np.percentile(y, 99), distance=int(0.33 * fs))
+def r_peaks(ecg, fs, hr_hint=None):
+    """R-peak sample indices, robust to the large T waves of ECG recorded inside the
+    scanner (magnetohydrodynamic effect), which a plain peak detector counts as extra
+    beats. Pan-Tompkins style: 10-35 Hz band-pass (QRS is sharp, T is slow), squared
+    derivative, 80 ms moving integration; the beat period is estimated from the
+    autocorrelation of that energy (or from hr_hint, bpm) and peaks closer than 0.7 of a
+    period are not allowed."""
+    y = sosfiltfilt(butter(3, [10, 35], "band", fs=fs, output="sos"), ecg)
+    e = np.convolve(np.diff(y, prepend=y[0]) ** 2, np.ones(int(0.08 * fs)) / int(0.08 * fs), "same")
+    if hr_hint:
+        period = 60.0 / hr_hint
+    else:
+        seg = e[: int(min(len(e), 120 * fs))] - e[: int(min(len(e), 120 * fs))].mean()
+        ac = np.correlate(seg, seg, "full")[len(seg) - 1:]
+        lo, hi = int(0.33 * fs), int(2.0 * fs)              # 30-180 bpm
+        period = (lo + int(np.argmax(ac[lo:hi]))) / fs
+    pk, _ = find_peaks(e, height=0.3 * np.percentile(e, 99), distance=int(0.7 * period * fs))
+    # move each detection to the largest |ECG| deflection within +-50 ms
+    w = int(0.05 * fs)
+    pk = np.array([p - w + int(np.argmax(np.abs(y[max(p - w, 0):p + w]))) for p in pk if p - w >= 0])
     return pk
 
 
@@ -48,6 +62,7 @@ def main():
     from pymatreader import read_mat
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("out_dir"); ap.add_argument("--outside"); ap.add_argument("--ecg", default="ECG")
+    ap.add_argument("--hr", type=float, help="expected heart rate inside (bpm), e.g. from the Siemens .puls log")
     a = ap.parse_args()
     d = Path(a.out_dir).expanduser()
     m = read_mat(str(d / "04_cwl_corrected.set"), variable_names=["etc", "EEG"])
@@ -75,7 +90,7 @@ def main():
     res, avg = {}, {}
     for name, (n, x, fs) in stages.items():
         ecg = x[n.index(a.ecg)]
-        pk = r_peaks(ecg, fs)
+        pk = r_peaks(ecg, fs, a.hr if name != "outside the scanner" else None)
         A, nb, t = locked_average(x[[n.index(c) for c in chans]], pk, fs)
         w = (t >= 0) & (t <= 0.6)
         rms = np.sqrt((A[:, w] ** 2).mean(1))
