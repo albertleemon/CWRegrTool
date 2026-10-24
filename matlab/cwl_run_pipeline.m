@@ -26,7 +26,11 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %     .delay_s      delay embedding half-width  (default 0.021)
 %     .obs_npc      FASTR residual PCA components after the gradient template
 %                   (Niazy 2005), 0 = off (default), e.g. 4; not part of the paper
-%     .obs_hp       high-pass (Hz) of the residual for the OBS fit (default 70)
+%     .obs_hp       high-pass (Hz) of the residual for the OBS fit (default 70; e.g. 60 to
+%                   also treat the 67 Hz harmonic)
+%     .cwl_lowpass  low-pass (Hz) applied to the CWL regressors only, before the regression
+%                   (default 0 = off, e.g. 90): the regression then cannot add loop noise
+%                   above that frequency, but also cannot remove artifacts above it
 %
 %   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
 %   this repository on the path (run setup_cwl_pipeline first).
@@ -48,6 +52,7 @@ window_s    = d('window_s', 4);
 delay_s     = d('delay_s', 0.021);
 obs_npc     = d('obs_npc', 0);
 obs_hp      = d('obs_hp', 70);
+cwl_lowpass = d('cwl_lowpass', 0);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
@@ -111,15 +116,24 @@ EEG = pop_saveset(EEG, 'filename', '03_filtered.set', 'filepath', out_dir);
 
 %% 3. CWL regression (EEG channels only), original CWRegrTool code
 before = EEG.data(eeg_idx, :);
+cwl_orig = EEG.data(cwl_idx, :);
+if cwl_lowpass > 0                                  % regressors only; EEG is not filtered
+    [z, p, k] = butter(8, cwl_lowpass / (EEG.srate / 2), 'low');   % steep, zero phase
+    [sos, g]  = zp2sos(z, p, k);
+    EEG.data(cwl_idx, :) = cwl_sosfiltfilt(sos, g, double(EEG.data(cwl_idx, :)).').';
+    fprintf('CWL regressors low-passed at %g Hz before the regression\n', cwl_lowpass);
+end
 EEG = pop_cwregression(EEG, EEG.srate, window_s, delay_s, 1, 'hann', ...
                        cwl_idx, eeg_idx, 'taperedhann', 0);
+EEG.data(cwl_idx, :) = cwl_orig;                    % keep the original loop signals in the output
 % the tool leaves the first ~half window and last ~1-3 windows uncorrected:
 % keep only the samples it actually changed
 changed = find(any(EEG.data(eeg_idx, :) ~= before, 1));
 fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
 EEG = pop_select(EEG, 'point', [changed(1) changed(end)]);
 
-EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_frac', obs_frac, 'n_volumes', nvol, 'tr_samples', TR, ...
+EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_hp', obs_hp, 'obs_frac', obs_frac, ...
+    'cwl_lowpass', cwl_lowpass, 'n_volumes', nvol, 'tr_samples', TR, ...
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
     'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
 EEG = pop_saveset(EEG, 'filename', '04_cwl_corrected.set', 'filepath', out_dir);

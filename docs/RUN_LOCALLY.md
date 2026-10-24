@@ -74,3 +74,17 @@ conda activate cwl            # 或你装了依赖的 Python 环境
 
 诊断：`stage_spectra.png`（原始、02、02b、04、随机相位 CWL 对照的平均谱）、`diagnostics_py.png`、`diagnostics.json`、`residual_peaks.png/json`。
 磁盘：02 和 02b 各约 1 GB（5000 Hz），确认结果后可删除。
+
+
+## 可选参数（运行 `run_subject.sh` 前用环境变量设置）
+| 参数 | 默认 | 作用 |
+|---|---|---|
+| `CWL_OBS` | 4 | OBS 主成分个数；0 = 跳过 OBS |
+| `CWL_OBS_HP` | 70 | OBS 只拟合该频率以上的残差；60 可同时处理 67 Hz 谐波 |
+| `CWL_LOWPASS` | 关 | 回归前只对碳线环信号做低通（8 阶，零相位），例如 90：回归不再把环路自身的高频噪声带进 EEG，但该频率以上的伪影也不再被去除 |
+| `CWL_RP` | 无 | SPM rp 文件或 fMRIPrep confounds.tsv，用于头动信息模板 |
+| `CWL_THRESHOLD` | 0.3 | 头动阈值（mm） |
+
+例：`CWL_OBS_HP=60 CWL_LOWPASS=90 ./run_subject.sh RAW.vhdr OUT 65,66`
+每次运行的设置写在 `OUT/settings.txt`，也记录在 `04_cwl_corrected.set` 的 `EEG.etc.cwl_pipeline` 里。
+Python 版对应：`--obs-npc`、`--obs-hp`、`--cwl-lowpass`。

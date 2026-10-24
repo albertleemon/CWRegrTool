@@ -40,6 +40,11 @@ F   = fft(c);
 F(2:half+1, :)       = F(2:half+1, :) .* ph;
 F(end-half+1:end, :) = F(end-half+1:end, :) .* conj(flipud(ph));
 nul = pre;  nul.data(cwl, :) = real(ifft(F)).';
+if isfield(info, 'cwl_lowpass') && info.cwl_lowpass > 0      % same regressor low-pass as the real run
+    [z, p, k] = butter(8, info.cwl_lowpass / (fs / 2), 'low');
+    [sos, g]  = zp2sos(z, p, k);
+    nul.data(cwl, :) = cwl_sosfiltfilt(sos, g, double(nul.data(cwl, :)).').';
+end
 nul = pop_cwregression(nul, fs, 4, 0.021, 1, 'hann', cwl, eeg, 'taperedhann', 0);
 xn  = double(nul.data(eeg, seg));
 pn  = pwelch(xn.', win, nper/2, nper, fs);

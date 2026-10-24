@@ -42,7 +42,7 @@ def delay_embed(regs, k):
 
 
 def cw_regression(eeg, cwl, fs, window_s=4.0, delay_s=0.021, taper=1,
-                  filter_band=(0.33, 125.0), return_artifact=False):
+                  filter_band=(0.33, 125.0), return_artifact=False, cwl_lowpass=None):
     """Remove motion-related artifacts from `eeg` using carbon-wire signals.
 
     eeg : (n_chan, n_samples) MR-gradient-corrected EEG
@@ -51,6 +51,7 @@ def cw_regression(eeg, cwl, fs, window_s=4.0, delay_s=0.021, taper=1,
     delay_s  : half-width of delay embedding in seconds (paper: 21 ms)
     taper    : 2**taper hops per window; taper=1 -> 50 % overlap Hann (sum=1)
     filter_band : band-pass applied to both inputs before regression, or None
+    cwl_lowpass : optional low-pass (Hz) applied to the CWL regressors only
 
     Returns the corrected EEG (and the subtracted artifact if requested).
     """
@@ -61,6 +62,9 @@ def cw_regression(eeg, cwl, fs, window_s=4.0, delay_s=0.021, taper=1,
     if filter_band:
         eeg = bandpass(eeg, fs, *filter_band)
         cwl = bandpass(cwl, fs, *filter_band)
+    if cwl_lowpass:
+        sos = butter(8, cwl_lowpass, btype="low", fs=fs, output="sos")   # steep: 8th order, zero phase
+        cwl = sosfiltfilt(sos, cwl, axis=-1)
 
     k = int(np.floor(fs * delay_s))
     n_hops = 2 ** taper

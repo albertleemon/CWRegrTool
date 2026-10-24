@@ -16,13 +16,18 @@
 #   MATLAB_BIN     MATLAB executable (default: matlab)
 #   PYTHON         Python with numpy/scipy/mne/pymatreader/matplotlib (default: python)
 #   CWL_OBS        OBS components (default 4; 0 = skip the OBS stage)
+#   CWL_OBS_HP     high-pass (Hz) of the residual for OBS (default 70; 60 also treats the 67 Hz harmonic)
+#   CWL_LOWPASS    low-pass (Hz) of the CWL regressors only (default off; e.g. 90 keeps the
+#                  regression from adding loop noise above 90 Hz, but it then removes nothing there)
 #   CWL_RP         SPM rp_*.txt or fMRIPrep confounds .tsv (default: moving-average templates)
 #   CWL_THRESHOLD  head-motion threshold in mm (default 0.3)
 set -euo pipefail
 VHDR="$(realpath "$1")"; OUT="$(realpath -m "$2")"; EXCL="${3:-65,66}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PYTHON:-python}"
-export CWL_OBS="${CWL_OBS:-4}"
+mkdir -p "$OUT"
+export CWL_OBS="${CWL_OBS:-4}" CWL_OBS_HP="${CWL_OBS_HP:-}" CWL_LOWPASS="${CWL_LOWPASS:-}"
+echo "settings: CWL_OBS=$CWL_OBS CWL_OBS_HP=${CWL_OBS_HP:-70} CWL_LOWPASS=${CWL_LOWPASS:-off} CWL_RP=${CWL_RP:-none} CWL_THRESHOLD=${CWL_THRESHOLD:-0.3}" | tee "$OUT/settings.txt"
 
 echo "== 1/4 correction (MATLAB): gradient -> OBS ($CWL_OBS components) -> filter -> CWL"
 "$HERE/matlab/run_headless.sh" "$VHDR" "$OUT" "$EXCL"
