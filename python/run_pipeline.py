@@ -60,7 +60,7 @@ def resolve_header(vhdr, out_dir):
 def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         exclude=(), n_templates=25, threshold=0.3, span=None,
         band=(0.33, 125.0), target_fs=500, window_s=4.0, delay_s=0.021, obs_npc=0,
-        obs_hp=70.0, artifact_lowpass=None):
+        obs_hp=70.0, artifact_lowpass=None, bcg_aas_on=False, bcg_hr=None):
     import mne
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -126,6 +126,14 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
                              delay_s=delay_s, filter_band=None, return_artifact=True,
                              artifact_lowpass=artifact_lowpass)
 
+    aas_info = None
+    if bcg_aas_on:                      # optional: heartbeat-locked AAS after CWL (Allen 1998)
+        from bcg_aas import bcg_aas
+        if not ecg_idx:
+            raise SystemExit(f"--bcg-aas needs an ECG channel ({ecg!r} not found)")
+        eeg, pk, hr = bcg_aas(eeg, data[ecg_idx[0]], fs, hr_hint=bcg_hr)
+        aas_info = dict(n_beats=int(len(pk)), heart_rate_bpm=float(hr))
+        print(f"BCG AAS after CWL: {len(pk)} beats, heart rate {hr:.1f} bpm")
     out = data.copy()
     out[eeg_idx] = eeg
     info = mne.create_info(names, fs, ch_types="eeg")
@@ -135,7 +143,7 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
                         eeg_idx=eeg_idx, cwl_idx=cwl_idx, artifact=art,
                         pre_cwl=pre_cwl)
     (out_dir / "pipeline_log.json").write_text(json.dumps(dict(
-        vhdr=str(vhdr), method=method, obs_npc=obs_npc, obs_hp=obs_hp, artifact_lowpass=artifact_lowpass, n_volumes=len(onsets), tr_samples=tr,
+        vhdr=str(vhdr), method=method, obs_npc=obs_npc, obs_hp=obs_hp, artifact_lowpass=artifact_lowpass, bcg_aas=aas_info, n_volumes=len(onsets), tr_samples=tr,
         span=[pre, post], n_templates=n_templates, threshold_mm=threshold, band=band,
         fs_out=fs, window_s=window_s, delay_s=delay_s,
         motion_events=(n_events if rp is not None else None),
@@ -160,9 +168,13 @@ if __name__ == "__main__":
     p.add_argument("--obs-npc", type=int, default=0,
                    help="FASTR residual PCA after the gradient template (Niazy 2005); 0 = off, e.g. 4")
     p.add_argument("--obs-hp", type=float, default=70.0, help="high-pass (Hz) of the residual for OBS")
+    p.add_argument("--bcg-aas", action="store_true",
+                   help="optional heartbeat-locked AAS after the CWL regression (default off)")
+    p.add_argument("--bcg-hr", type=float, help="expected heart rate (bpm) for the R-peak detection")
     p.add_argument("--artifact-lowpass", type=float, default=None,
                    help="low-pass (Hz) of the CWL artifact estimate before subtraction (e.g. 90)")
     a = p.parse_args()
     run(a.vhdr, a.out_dir, a.rp, a.marker, a.cwl_regex, a.ecg, a.exclude, a.templates,
         a.threshold, tuple(a.span) if a.span else None, target_fs=a.target_fs,
-        obs_npc=a.obs_npc, obs_hp=a.obs_hp, artifact_lowpass=a.artifact_lowpass)
+        obs_npc=a.obs_npc, obs_hp=a.obs_hp, artifact_lowpass=a.artifact_lowpass,
+        bcg_aas_on=a.bcg_aas, bcg_hr=a.bcg_hr)

@@ -1,6 +1,7 @@
 """Mean EEG spectrum at each processing stage of one pipeline run:
   raw -> 02 gradient template subtraction -> 02b OBS residual removal (if run)
-      -> 04 CWL regression, plus the null control (regression with random-phase CWL).
+      -> 04 CWL regression (-> 05 BCG AAS, if run), plus the null control
+      (regression with random-phase CWL).
 
 "After CWL" and "null" come from diagnostics_data.mat (matlab/cwl_diagnose.m). The raw,
 02 and 02b spectra are computed from the 5000 Hz data on exactly the same samples and
@@ -61,6 +62,15 @@ def stage_spectra(out_dir, vhdr, f_target):
     return out
 
 
+def set_spectrum(fp, f_target):
+    """Mean EEG spectrum of a pipeline output that is already 500 Hz and trimmed (05)."""
+    import mne
+    raw = mne.io.read_raw_eeglab(fp, preload=True, verbose="error")
+    eeg = [i for i, n in enumerate(raw.ch_names) if not EXCLUDE.match(n)]
+    f, p = welch(raw.get_data(picks=eeg) * 1e6, raw.info["sfreq"], nperseg=2000, noverlap=1000, axis=-1)
+    return np.mean([np.interp(f_target, f, q) for q in p], 0)
+
+
 def main():
     import matplotlib
     matplotlib.use("Agg")
@@ -78,6 +88,8 @@ def main():
         curves.append(("after gradient correction (03)", m["p0"].mean(1), "#d62728", "-"))
     curves += [("after CWL regression", m["p1"].mean(1), "#2ca02c", "-"),
                ("null: regression with random-phase CWL", m["pn"].mean(1), "#1f77b4", "--")]
+    if (d / "05_bcg_aas.set").exists():
+        curves.insert(-1, ("after CWL + BCG AAS (05)", set_spectrum(d / "05_bcg_aas.set", f), "#9467bd", "-"))
     b = (f >= 0.5) & (f <= 125)
     fig, ax = plt.subplots(figsize=(11, 5.5), layout="constrained")
     for lab, p, c, ls in curves:

@@ -3,11 +3,12 @@
 #
 #   ./evaluate_subject.sh OUT_DIR OUTSIDE.vhdr
 #
-# OUT_DIR is a run_subject.sh output folder (needs 03_filtered.set and 04_cwl_corrected.set).
+# OUT_DIR is a run_subject.sh output folder (needs 03_filtered.set and 04_cwl_corrected.set;
+# 05_bcg_aas.set, if present, is evaluated as an extra stage).
 # Writes into OUT_DIR:
 #   inside_vs_outside.png / .channels.csv   traces, mean spectrum, per-channel RMS 1-30 Hz
 #   outside_comparison.png / .json          spectral distance (eq. 4), band differences, alpha topography
-#   bcg_residual.png / .json                heartbeat-locked residual (03, 04, outside)
+#   bcg_residual.png / .json                heartbeat-locked residual (03, 04, [05,] outside)
 #   removed_signal.json                     coherence of the removed part / of the channels with neighbours
 #   evaluation.txt                          all terminal output
 set -euo pipefail

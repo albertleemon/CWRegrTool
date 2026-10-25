@@ -28,6 +28,10 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %                   (Niazy 2005), 0 = off (default), e.g. 4; not part of the paper
 %     .obs_hp       high-pass (Hz) of the residual for the OBS fit (default 70; e.g. 60 to
 %                   also treat the 67 Hz harmonic)
+%     .bcg_aas      1 = after the CWL regression, subtract the remaining heartbeat-locked
+%                   BCG by AAS (Allen 1998), saved as 05_bcg_aas.set (default 0 = off;
+%                   not part of the paper; removes heartbeat-evoked potentials too)
+%     .bcg_hr       expected heart rate (bpm) for the R-peak detection (optional)
 %     .cwl_lowpass  low-pass (Hz) of the ESTIMATED CWL artifact before it is subtracted
 %                   (default 0 = off, e.g. 90): above that frequency the EEG stays exactly
 %                   as before the regression (no loop noise added, nothing removed)
@@ -53,6 +57,8 @@ delay_s     = d('delay_s', 0.021);
 obs_npc     = d('obs_npc', 0);
 obs_hp      = d('obs_hp', 70);
 cwl_lowpass = d('cwl_lowpass', 0);
+bcg_aas     = d('bcg_aas', 0);
+bcg_hr      = d('bcg_hr', []);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
@@ -140,6 +146,16 @@ EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_hp', ob
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
     'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
 EEG = pop_saveset(EEG, 'filename', '04_cwl_corrected.set', 'filepath', out_dir);
+
+%% 4. optional: heartbeat-locked AAS of the remaining BCG (Allen et al. 1998)
+if bcg_aas
+    assert(~isempty(ecg_idx), 'opts.bcg_aas needs an ECG channel (%s not found)', ecg_label);
+    [y, pk, hr] = cwl_bcg_aas(EEG.data(eeg_idx, :), EEG.data(ecg_idx(1), :), EEG.srate, [], [], bcg_hr);
+    EEG.data(eeg_idx, :) = y;
+    fprintf('BCG AAS after CWL: %d beats, heart rate %.1f bpm\n', numel(pk), hr);
+    EEG.etc.cwl_pipeline.bcg_aas = struct('n_beats', numel(pk), 'heart_rate_bpm', hr);
+    EEG = pop_saveset(EEG, 'filename', '05_bcg_aas.set', 'filepath', out_dir);
+end
 end
 
 function v = setdefault(s, f, v)

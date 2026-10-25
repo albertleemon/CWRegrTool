@@ -111,3 +111,30 @@ def test_obs_removes_shape_changes_but_keeps_alpha():
           % (hf0, hf4, hfb, al4 / al0))
     assert hf4 < 0.1 * hf0
     assert abs(al4 / al0 - 1) < 0.01
+
+
+def test_bcg_aas_removes_locked_residual_keeps_eeg():
+    from bcg_aas import bcg_aas
+    fs, n = 500, 500 * 180
+    rng = np.random.default_rng(4)
+    t = np.arange(n) / fs
+    beats = np.cumsum(60 / 63 + rng.normal(scale=0.04, size=200)); beats = beats[beats < 178]
+    ecg = rng.normal(size=n) * 20
+    resid = np.zeros((3, n))
+    k = np.arange(int(0.6 * fs)) / fs
+    shape = -15 * np.exp(-0.5 * ((k - 0.25) / 0.05) ** 2)
+    for b in beats:
+        i = int(b * fs)
+        ecg += 800 * np.exp(-0.5 * ((t - b) / 0.008) ** 2) + 3000 * np.exp(-0.5 * ((t - b - 0.33) / 0.03) ** 2)
+        resid[:, i:i + len(k)] += shape[: max(0, min(len(k), n - i))] * np.array([[1], [.5], [.2]])
+    brain = rng.normal(size=(3, n)) * 5 + 8 * np.sin(2 * np.pi * 10.3 * t)
+    out, pk, hr = bcg_aas(brain + resid, ecg, fs)
+    from check_bcg_residual import locked_average
+    rms = lambda x: np.sqrt(np.mean(x ** 2))
+    lock = lambda x: rms(locked_average(x, (beats * fs).astype(int), fs, 0.0, 0.6)[0])
+    # heartbeat-locked residual (what AAS targets) and broadband change of the EEG
+    print("HR %.1f, beats %d/%d; locked residual before %.2f, after %.2f uV; EEG power x%.3f"
+          % (hr, len(pk), len(beats), lock(resid), lock(out - brain),
+             (out - resid * 0).var() / (brain + resid).var()))
+    assert abs(hr - 63) < 3 and abs(len(pk) - len(beats)) <= 2
+    assert lock(out - brain) < 0.15 * lock(resid)

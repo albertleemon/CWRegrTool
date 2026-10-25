@@ -82,6 +82,8 @@ conda activate cwl            # 或你装了依赖的 Python 环境
 | `CWL_OBS` | 4 | OBS 主成分个数；0 = 跳过 OBS |
 | `CWL_OBS_HP` | 70 | OBS 只拟合该频率以上的残差；60 可同时处理 67 Hz 谐波 |
 | `CWL_LOWPASS` | 关 | 对 CWL 回归**估计出的伪影**做低通（8 阶，零相位）后再从 EEG 中减去，例如 90：90 Hz 以上 EEG 保持回归前（OBS 后）的样子，不带进环路噪声，也不去除该频段伪影。（v1 曾对碳线环信号本身低通，会使带延迟的回归在过渡带放大噪声，已弃用） |
+| `CWL_BCG_AAS` | 0（关） | 1 = CWL 回归后再做一次心跳锁定的 BCG 平均模板减法（Allen 1998），输出 `05_bcg_aas.set`；R 波从 ECG 通道检测（对扫描仪内高大 T 波稳健），每个心跳减去最近 21 个心跳的平均 |
+| `CWL_BCG_HR` | 无 | 可选：预期心率（bpm，如 `.puls` 中的 PULS 值），帮助 R 波检测；不填则自动估计 |
 | `CWL_RP` | 无 | SPM rp 文件或 fMRIPrep confounds.tsv，用于头动信息模板 |
 | `CWL_THRESHOLD` | 0.3 | 头动阈值（mm） |
 

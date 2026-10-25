@@ -5,6 +5,7 @@ power spectra", eq. 4, plus band-wise and topographic comparisons).
 Stages compared with the outside recording (all 500 Hz, 0.33-125 Hz, same EEG channels):
     "no BCG correction"  = 03_filtered.set   (gradient + OBS corrected, before CWL)
     "CWL"                = 04_cwl_corrected.set
+    "CWL + BCG AAS"      = 05_bcg_aas.set        (only if the run used CWL_BCG_AAS=1)
 The outside recording (BrainVision) is band-passed 0.33-125 Hz and resampled to 500 Hz
 exactly like the pipeline. Optional --crop START END (s) restricts it, e.g. to drop the
 part with the participant entering the scanner.
@@ -83,6 +84,8 @@ def main():
     trim = tuple(int(v) for v in m["etc"]["cwl_pipeline"]["trimmed_to"])
     stages = {"no BCG correction (03)": load_set(d / "03_filtered.set", trim),
               "CWL (04)": load_set(d / "04_cwl_corrected.set")}
+    if (d / "05_bcg_aas.set").exists():
+        stages["CWL + BCG AAS (05)"] = load_set(d / "05_bcg_aas.set")
     on, ox, ofs = load_outside(Path(a.outside).expanduser(), a.crop)
     chans = [c for c in stages["CWL (04)"][0]
              if not EXCLUDE.match(c) and c in on and all(c in s[0] for s in stages.values())]
@@ -131,7 +134,7 @@ def main():
     (d / "outside_comparison.json").write_text(json.dumps(res, indent=2))
     print(json.dumps(res, indent=2))
 
-    col = {"no BCG correction (03)": "#d62728", "CWL (04)": "#2ca02c"}
+    col = {"no BCG correction (03)": "#d62728", "CWL (04)": "#2ca02c", "CWL + BCG AAS (05)": "#9467bd"}
     fig = plt.figure(figsize=(13, 8), layout="constrained")
     ax = fig.add_subplot(2, 1, 1)
     ax.semilogy(f[b], po.mean(0)[b], "k", lw=1.3, label="outside the scanner")
@@ -144,7 +147,8 @@ def main():
     x = np.arange(len(BANDS))
     for k, name in enumerate(spec):
         v = list(res["stages"][name]["band_diff_db"].values())
-        ax.bar(x + (k - .5) * .4, v, .4, color=col[name], label=name)
+        w = .8 / len(spec)
+        ax.bar(x + (k - (len(spec) - 1) / 2) * w, v, w, color=col[name], label=name)
     ax.axhline(0, color="k", lw=.6)
     ax.set_xticks(x, [f"{lo}-{hi}" for lo, hi in BANDS])
     ax.set(ylabel="inside - outside (dB)", xlabel="Hz", title="band power vs outside")

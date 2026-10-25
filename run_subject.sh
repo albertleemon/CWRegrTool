@@ -8,6 +8,7 @@
 #   02b_obs_corrected.set      OBS removal of the gradient residual, 5000 Hz (Niazy 2005)
 #   03_filtered.set            0.33-125 Hz band-pass + 500 Hz
 #   04_cwl_corrected.set       CWL regression (van der Meer 2016)  <- final result
+#   05_bcg_aas.set             optional (CWL_BCG_AAS=1): + heartbeat-locked AAS (Allen 1998) <- final result then
 # Diagnostics:
 #   stage_spectra.png          mean spectrum raw / 02 / 02b / 04 / random-phase-CWL null
 #   diagnostics_py.png, diagnostics.json, residual_peaks.png/.json, matlab_run.log
@@ -19,6 +20,9 @@
 #   CWL_OBS_HP     high-pass (Hz) of the residual for OBS (default 70; 60 also treats the 67 Hz harmonic)
 #   CWL_LOWPASS    low-pass (Hz) of the estimated CWL artifact before subtraction (default off;
 #                  e.g. 90: above 90 Hz the EEG stays as after OBS - no loop noise added, nothing removed)
+#   CWL_BCG_AAS    1 = heartbeat-locked AAS after the CWL regression -> 05_bcg_aas.set (default 0;
+#                  not part of the paper; removes heartbeat-evoked potentials too)
+#   CWL_BCG_HR     expected heart rate (bpm) for its R-peak detection (optional)
 #   CWL_RP         SPM rp_*.txt or fMRIPrep confounds .tsv (default: moving-average templates)
 #   CWL_THRESHOLD  head-motion threshold in mm (default 0.3)
 set -euo pipefail
@@ -26,8 +30,8 @@ VHDR="$(realpath "$1")"; OUT="$(realpath -m "$2")"; EXCL="${3:-65,66}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PY="${PYTHON:-python}"
 mkdir -p "$OUT"
-export CWL_OBS="${CWL_OBS:-4}" CWL_OBS_HP="${CWL_OBS_HP:-}" CWL_LOWPASS="${CWL_LOWPASS:-}"
-echo "settings: CWL_OBS=$CWL_OBS CWL_OBS_HP=${CWL_OBS_HP:-70} CWL_LOWPASS=${CWL_LOWPASS:-off} CWL_RP=${CWL_RP:-none} CWL_THRESHOLD=${CWL_THRESHOLD:-0.3}" | tee "$OUT/settings.txt"
+export CWL_OBS="${CWL_OBS:-4}" CWL_OBS_HP="${CWL_OBS_HP:-}" CWL_LOWPASS="${CWL_LOWPASS:-}" CWL_BCG_AAS="${CWL_BCG_AAS:-0}" CWL_BCG_HR="${CWL_BCG_HR:-}"
+echo "settings: CWL_OBS=$CWL_OBS CWL_OBS_HP=${CWL_OBS_HP:-70} CWL_LOWPASS=${CWL_LOWPASS:-off} CWL_BCG_AAS=$CWL_BCG_AAS CWL_RP=${CWL_RP:-none} CWL_THRESHOLD=${CWL_THRESHOLD:-0.3}" | tee "$OUT/settings.txt"
 
 echo "== 1/4 correction (MATLAB): gradient -> OBS ($CWL_OBS components) -> filter -> CWL"
 "$HERE/matlab/run_headless.sh" "$VHDR" "$OUT" "$EXCL"

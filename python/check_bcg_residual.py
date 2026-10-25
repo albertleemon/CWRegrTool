@@ -17,34 +17,12 @@ import tempfile
 from pathlib import Path
 
 import numpy as np
-from scipy.signal import butter, find_peaks, resample_poly, sosfiltfilt
+from scipy.signal import resample_poly
 
+from bcg_aas import r_peaks
 from cwregression import bandpass
 
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
-
-
-def r_peaks(ecg, fs, hr_hint=None):
-    """R-peak sample indices, robust to the large T waves of ECG recorded inside the
-    scanner (magnetohydrodynamic effect), which a plain peak detector counts as extra
-    beats. Pan-Tompkins style: 10-35 Hz band-pass (QRS is sharp, T is slow), squared
-    derivative, 80 ms moving integration; the beat period is estimated from the
-    autocorrelation of that energy (or from hr_hint, bpm) and peaks closer than 0.7 of a
-    period are not allowed."""
-    y = sosfiltfilt(butter(3, [10, 35], "band", fs=fs, output="sos"), ecg)
-    e = np.convolve(np.diff(y, prepend=y[0]) ** 2, np.ones(int(0.08 * fs)) / int(0.08 * fs), "same")
-    if hr_hint:
-        period = 60.0 / hr_hint
-    else:
-        seg = e[: int(min(len(e), 120 * fs))] - e[: int(min(len(e), 120 * fs))].mean()
-        ac = np.correlate(seg, seg, "full")[len(seg) - 1:]
-        lo, hi = int(0.33 * fs), int(2.0 * fs)              # 30-180 bpm
-        period = (lo + int(np.argmax(ac[lo:hi]))) / fs
-    pk, _ = find_peaks(e, height=0.3 * np.percentile(e, 99), distance=int(0.7 * period * fs))
-    # move each detection to the largest |ECG| deflection within +-50 ms
-    w = int(0.05 * fs)
-    pk = np.array([p - w + int(np.argmax(np.abs(y[max(p - w, 0):p + w]))) for p in pk if p - w >= 0])
-    return pk
 
 
 def locked_average(x, pk, fs, pre=0.2, post=0.8):
@@ -76,6 +54,8 @@ def main():
 
     stages = {"before CWL (03)": load_set("03_filtered.set", True),
               "after CWL (04)": load_set("04_cwl_corrected.set", False)}
+    if (d / "05_bcg_aas.set").exists():
+        stages["CWL + BCG AAS (05)"] = load_set("05_bcg_aas.set", False)
     if a.outside:
         from run_pipeline import resolve_header
         raw = mne.io.read_raw_brainvision(resolve_header(Path(a.outside).expanduser(),
@@ -107,6 +87,11 @@ def main():
         res["residual_fraction_median"] = float(np.median(r))
         print(f"residual BCG after CWL: median {100 * np.median(r):.1f} % of the BCG amplitude "
               f"(range {100 * r.min():.1f}-{100 * r.max():.1f} %)")
+        if "CWL + BCG AAS (05)" in res:
+            r5 = np.array(list(res["CWL + BCG AAS (05)"]["per_channel"].values())) / \
+                np.array(list(res["before CWL (03)"]["per_channel"].values()))
+            res["residual_fraction_after_aas_median"] = float(np.median(r5))
+            print(f"residual BCG after CWL + AAS: median {100 * np.median(r5):.1f} % of the BCG amplitude")
     (d / "bcg_residual.json").write_text(json.dumps(res, indent=2))
 
     fig, ax = plt.subplots(1, len(avg) + 1, figsize=(5 * (len(avg) + 1), 4), layout="constrained")
@@ -115,7 +100,8 @@ def main():
         ax[i].plot(t, A.T, lw=.5, color="0.4"); ax[i].plot(t, A.mean(0), "r", lw=1.2)
         ax[i].set(title=f"{name}\n(heartbeat-locked average)", xlabel="s from R peak", ylabel="µV")
         ax[i].axvline(0, color="k", lw=.5)
-    ax[1].set_ylim(ax[0].get_ylim())
+    for i in range(1, len(avg)):
+        ax[i].set_ylim(ax[0].get_ylim())
     names = list(avg)
     x = np.arange(len(chans))
     for k, name in enumerate(names):

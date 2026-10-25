@@ -9,6 +9,8 @@ opts.exclude = ex(~cellfun('isempty', ex));
 if ~isempty(getenv('CWL_RP')), opts.rp_file = getenv('CWL_RP'); end
 if ~isempty(getenv('CWL_OBS')), opts.obs_npc = str2double(getenv('CWL_OBS')); end
 if ~isempty(getenv('CWL_OBS_HP')), opts.obs_hp = str2double(getenv('CWL_OBS_HP')); end
+if ~isempty(getenv('CWL_BCG_AAS')), opts.bcg_aas = str2double(getenv('CWL_BCG_AAS')); end
+if ~isempty(getenv('CWL_BCG_HR')), opts.bcg_hr = str2double(getenv('CWL_BCG_HR')); end
 if ~isempty(getenv('CWL_LOWPASS')), opts.cwl_lowpass = str2double(getenv('CWL_LOWPASS')); end
 if ~isempty(getenv('CWL_THRESHOLD')), opts.threshold = str2double(getenv('CWL_THRESHOLD')); end
 try
