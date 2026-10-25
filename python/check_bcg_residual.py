@@ -123,7 +123,29 @@ def main():
     ax[-1].set_xticks(x, chans, rotation=90, fontsize=5)
     ax[-1].set(ylabel="RMS 0-0.6 s (µV)", title="heartbeat-locked RMS per channel"); ax[-1].legend(fontsize=7)
     fig.savefig(d / "bcg_residual.png", dpi=110)
-    print("wrote", d / "bcg_residual.png", "and bcg_residual.json")
+    # scalp maps (standard 10-05 positions; channels without a position are skipped)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        mont = mne.channels.make_standard_montage("standard_1005")
+    tc = [c for c in chans if c in mont.ch_names]
+    if len(tc) >= 16:
+        info = mne.create_info(tc, 500.0, "eeg"); info.set_montage(mont)
+        fig, ax = plt.subplots(1, len(res_names := [n for n in names]) + 1, figsize=(4.3 * (len(names) + 1), 4.3),
+                               layout="constrained")
+        vmax = max(res[n]["per_channel"][c] for n in names[1:] for c in tc) if len(names) > 1 else None
+        for i, n in enumerate(names):
+            v = np.array([res[n]["per_channel"][c] for c in tc])
+            im, _ = mne.viz.plot_topomap(v, info, axes=ax[i], show=False, cmap="Reds",
+                                         vlim=(0, v.max() if i == 0 else vmax))
+            ax[i].set_title(f"{n}\nmedian {np.median(v):.1f} µV", fontsize=10)
+            plt.colorbar(im, ax=ax[i], shrink=.7, label="µV")
+        fr = np.array([res[names[1]]["per_channel"][c] / res[names[0]]["per_channel"][c] for c in tc])
+        im, _ = mne.viz.plot_topomap(fr, info, axes=ax[-1], show=False, cmap="viridis", vlim=(0, 0.8))
+        ax[-1].set_title("residual fraction (04 / 03)", fontsize=10)
+        plt.colorbar(im, ax=ax[-1], shrink=.7)
+        fig.savefig(d / "bcg_topomap.png", dpi=110)
+    print("wrote", d / "bcg_residual.png", ", bcg_topomap.png and bcg_residual.json")
 
 
 if __name__ == "__main__":
