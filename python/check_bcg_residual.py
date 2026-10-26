@@ -21,6 +21,7 @@ from scipy.signal import resample_poly
 
 from bcg_aas import r_peaks
 from cwregression import bandpass
+from run_manifest import has_stage
 
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
 
@@ -54,7 +55,7 @@ def main():
 
     stages = {"before CWL (03)": load_set("03_filtered.set", True),
               "after CWL (04)": load_set("04_cwl_corrected.set", False)}
-    if (d / "05_bcg_aas.set").exists():
+    if has_stage(d, "05_bcg_aas"):
         stages["CWL + BCG AAS (05)"] = load_set("05_bcg_aas.set", False)
     if a.outside:
         from run_pipeline import resolve_header

@@ -50,7 +50,7 @@ Recommended settings: `CWL_OBS=4 CWL_OBS_HP=60 CWL_LOWPASS=90 ./run_subject.sh R
 - **Heart rate / pulse data:** R-peak detection in `python/bcg_aas.py` (`r_peaks`) is robust to the in-scanner T wave; it gives 62 bpm, which matches the PULS log. Pulse data (`.puls`) is not needed for processing.
 
 ## Open / next steps
-1. The user should run `cwl_crosscheck` in real MATLAB (expect 5× PASS), then run sub-kvhDR with the standalone version and confirm that `04` matches the earlier EEGLAB-based result.
+1. The user should run `cwl_crosscheck` in real MATLAB (expect 8× PASS: template matrix, gradient, OBS fraction + waveform, R-peaks, BCG AAS, CWL regression interior, resampling; it errors on any FAIL; events/I-O/band-pass/full pipeline are not covered), then run sub-kvhDR with the standalone version and confirm that `04` matches the earlier EEGLAB-based result.
 2. Run sub-kvhDR with `CWL_BCG_AAS=1` (optionally `CWL_BCG_HR=64`) and compare 05 vs 04 in `evaluation.txt` / `bcg_residual.json`. BCG AAS has not yet been run on real data.
 3. Open questions for the user:
    - Is the resting state eyes open or closed? The alpha question was deferred: the user said to ignore it for now.

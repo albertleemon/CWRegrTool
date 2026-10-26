@@ -32,6 +32,8 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %                   BCG by AAS (Allen 1998), saved as 05_bcg_aas.set (default 0 = off;
 %                   not part of the paper; removes heartbeat-evoked potentials too)
 %     .bcg_hr       expected heart rate (bpm) for the R-peak detection (optional)
+%     .check_markers  1 = stop if the volume markers are duplicated or unevenly spaced
+%                   (a missing marker leaves a stretch without gradient correction); default 1
 %     .cwl_lowpass  low-pass (Hz) of the ESTIMATED CWL artifact before it is subtracted
 %                   (default 0 = off, e.g. 90): above that frequency the EEG stays exactly
 %                   as before the regression (no loop noise added, nothing removed)
@@ -59,11 +61,13 @@ obs_hp      = d('obs_hp', 70);
 cwl_lowpass = d('cwl_lowpass', 0);
 bcg_aas     = d('bcg_aas', 0);
 bcg_hr      = d('bcg_hr', []);
+check_mk    = d('check_markers', 1);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
 EEG = cwl_load_brainvision(vhdr);
 fs  = EEG.srate;
+raw_pnts = EEG.pnts;
 labels = {EEG.chanlocs.labels};
 cwl_idx = find(~cellfun('isempty', regexp(labels, cwl_regex, 'once')));
 ecg_idx = find(strcmp(labels, ecg_label));
@@ -75,11 +79,26 @@ onsets = round([EEG.event(strcmp(types, marker)).latency]);
 assert(numel(onsets) > 2, 'found %d "%s" markers', numel(onsets), marker);
 TR = round(median(diff(onsets)));
 span = d('span', [0 TR-1]);
+if check_mk, check_volume_markers(onsets, TR); end
+
+% a re-run must not leave stage files of an earlier run (other settings, other recording)
+% in this folder: evaluation scripts only trust the stages listed in run_manifest.json
+stage_names = {'02_gradient_corrected', '02b_obs_corrected', '03_filtered', '04_cwl_corrected', '05_bcg_aas'};
+for sn = stage_names
+    for ext = {'.set', '.fdt'}
+        old = fullfile(out_dir, [sn{1} ext{1}]);
+        if exist(old, 'file'), delete(old); end
+    end
+end
+if exist(fullfile(out_dir, 'run_manifest.json'), 'file'), delete(fullfile(out_dir, 'run_manifest.json')); end
+stages = {};
 
 %% 1. gradient artifact on ALL channels (CWL included)
 nvol = numel(onsets);
+rp_source = '';  n_motion_events = [];
 if ~isempty(rp_file)
-    rp_file = motion_to_rp(rp_file, out_dir, nvol, threshold);
+    rp_source = rp_file;
+    [rp_file, n_motion_events] = motion_to_rp(rp_file, out_dir, nvol, threshold);
     [~, W] = m_rp_info(rp_file, nvol, threshold, n_templates);
     method = 'rp_info';
 else
@@ -93,7 +112,7 @@ EEG.pnts  = size(EEG.data, 2);
 EEG.times = (0:EEG.pnts-1) / fs * 1000;  EEG.xmax = EEG.times(end) / 1000;
 EEG.event = EEG.event([EEG.event.latency] >= a & [EEG.event.latency] <= b);
 for i = 1:numel(EEG.event), EEG.event(i).latency = EEG.event(i).latency - a + 1; end
-EEG = cwl_saveset(EEG, out_dir, '02_gradient_corrected.set');
+EEG = cwl_saveset(EEG, out_dir, '02_gradient_corrected.set');  stages{end+1} = '02_gradient_corrected';
 
 %% 1b. optional: OBS removal of the gradient residual (Niazy et al. 2005), all channels
 obs_frac = [];
@@ -106,7 +125,7 @@ if obs_npc > 0
     end
     fprintf('OBS residual removal (%d components, >%g Hz): median %.0f%% of the residual removed\n', ...
             obs_npc, obs_hp, 100 * median(obs_frac));
-    EEG = cwl_saveset(EEG, out_dir, '02b_obs_corrected.set');
+    EEG = cwl_saveset(EEG, out_dir, '02b_obs_corrected.set');  stages{end+1} = '02b_obs_corrected';
 end
 
 %% 2. identical zero-phase band-pass on every channel, then resample
@@ -115,15 +134,16 @@ end
 EEG.data  = cwl_sosfiltfilt(sos, g, double(EEG.data).').';
 EEG = cwl_resample(EEG, target_fs);              % anti-aliased, same as EEGLAB pop_resample
 assert(~any(isnan(EEG.data(:))), 'NaN in data before CWL regression');
-EEG = cwl_saveset(EEG, out_dir, '03_filtered.set');
+EEG = cwl_saveset(EEG, out_dir, '03_filtered.set');  stages{end+1} = '03_filtered';
 
 %% 3. CWL regression (EEG channels only), original CWRegrTool code
 before = EEG.data(eeg_idx, :);
-EEG = cwl_cwregression(EEG, window_s, delay_s, cwl_idx, eeg_idx);
-% the tool leaves the first ~half window and last ~1-3 windows uncorrected:
-% keep only the samples it actually changed (determined before any artifact low-pass,
-% which would smear tiny values into the uncorrected edges)
-changed = find(any(EEG.data(eeg_idx, :) ~= before, 1));
+[EEG, wts] = cwl_cwregression(EEG, window_s, delay_s, cwl_idx, eeg_idx);
+% the tool leaves the first ~half window and last ~1-3 windows uncorrected: keep only
+% the samples that received a window weight (not the samples whose value happened to
+% change, which a zero fit or an all-zero loop would leave empty)
+valid = find(wts > 0);
+assert(~isempty(valid), 'CWL regression corrected no samples (recording shorter than the %g s window?)', window_s);
 if cwl_lowpass > 0
     % low-pass the artifact estimate, not the regressors: low-passing the regressors
     % makes the lagged fit ill-conditioned and amplifies the transition band
@@ -134,14 +154,22 @@ if cwl_lowpass > 0
     EEG.data(eeg_idx, :) = double(before) - art;
     fprintf('CWL artifact estimate low-passed at %g Hz before subtraction\n', cwl_lowpass);
 end
-fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
-EEG = crop_points(EEG, changed(1), changed(end));
+fprintf('CWL regression corrected samples %d..%d of %d\n', valid(1), valid(end), EEG.pnts);
+EEG = crop_points(EEG, valid(1), valid(end));
 
 EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_hp', obs_hp, 'obs_frac', obs_frac, ...
     'cwl_lowpass', cwl_lowpass, 'n_volumes', nvol, 'tr_samples', TR, ...
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
-    'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
-EEG = cwl_saveset(EEG, out_dir, '04_cwl_corrected.set');
+    'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [valid(1) valid(end)], ...
+    'vhdr', vhdr, 'marker', marker, 'onsets_raw_samples', onsets(:).', 'raw_srate', fs, ...
+    'raw_pnts', raw_pnts, 'first_kept_raw_sample', a, ...
+    'output_start_raw_s', (a - 1) / fs + (valid(1) - 1) / EEG.srate, ...
+    'motion_file', rp_source, 'motion_threshold_mm', threshold, 'n_motion_events', n_motion_events, ...
+    'n_templates', n_templates, 'cwl_regex', cwl_regex, 'ecg_label', ecg_label, 'exclude', {exclude}, ...
+    'target_fs', target_fs, 'window_s', window_s, 'delay_s', delay_s, 'taper_factor', 1, ...
+    'taper_function', 'hann', 'regression_method', 'taperedhann', 'bcg_hr', bcg_hr, ...
+    'created', datestr(now, 31));
+EEG = cwl_saveset(EEG, out_dir, '04_cwl_corrected.set');  stages{end+1} = '04_cwl_corrected';
 
 %% 4. optional: heartbeat-locked AAS of the remaining BCG (Allen et al. 1998)
 if bcg_aas
@@ -150,8 +178,9 @@ if bcg_aas
     EEG.data(eeg_idx, :) = y;
     fprintf('BCG AAS after CWL: %d beats, heart rate %.1f bpm\n', numel(pk), hr);
     EEG.etc.cwl_pipeline.bcg_aas = struct('n_beats', numel(pk), 'heart_rate_bpm', hr);
-    EEG = cwl_saveset(EEG, out_dir, '05_bcg_aas.set');
+    EEG = cwl_saveset(EEG, out_dir, '05_bcg_aas.set');  stages{end+1} = '05_bcg_aas';
 end
+write_manifest(out_dir, vhdr, stages, EEG.etc.cwl_pipeline);
 end
 
 function v = setdefault(s, f, v)
@@ -178,7 +207,7 @@ end
 EEG.event = ev;
 end
 
-function rp_txt = motion_to_rp(f, out_dir, nvol, threshold)
+function [rp_txt, n_events] = motion_to_rp(f, out_dir, nvol, threshold)
 % Accept an fMRIPrep confounds .tsv (trans_x..rot_z, mm/rad) as well as an SPM rp file;
 % report how many frame-to-frame translations exceed the threshold.
 if endsWith(f, '.tsv')
@@ -193,9 +222,37 @@ if size(rp, 1) ~= nvol
     warning('cwl:rp', '%d motion rows but %d volume markers', size(rp, 1), nvol);
 end
 steps = sqrt(sum(diff(rp(:, 1:3)).^2, 2));
+n_events = sum(steps > threshold);
 fprintf('head motion: %d volume steps > %g mm (max step %.3f mm)\n', ...
         sum(steps > threshold), threshold, max(steps));
 if ~any(steps > threshold)
     fprintf('  -> no motion events: templates equal moving average; lower opts.threshold to use motion\n');
 end
+end
+
+function check_volume_markers(onsets, TR)
+% The template subtraction assumes one marker per TR. A missing marker leaves a
+% stretch without correction that the later trimming would keep; a duplicate or
+% extra marker corrupts the templates.
+tol = max(5, round(0.01 * TR));
+dd = diff(onsets(:));
+dev = abs(dd - TR);
+bad = find(dev > tol);
+if ~isempty(bad)
+    k = bad(1:min(5, numel(bad)));
+    error('cwl:markers', ['%d volume interval(s) deviate from the TR of %d samples by more than %d samples ' ...
+          '(first at markers %s, intervals %s samples): missing, duplicated or extra markers. ' ...
+          'Fix the markers or set opts.check_markers = 0.'], numel(bad), TR, tol, ...
+          mat2str(k(:).'), mat2str(dd(k).'));
+end
+end
+
+function write_manifest(out_dir, vhdr, stages, info)
+% run_manifest.json: which stage files belong to THIS run (evaluation scripts check it)
+m = struct('vhdr', vhdr, 'stages', {stages}, 'created', info.created, ...
+           'obs_npc', info.obs_npc, 'cwl_lowpass', info.cwl_lowpass, ...
+           'bcg_aas', isfield(info, 'bcg_aas'), 'trimmed_to', info.trimmed_to);
+fid = fopen(fullfile(out_dir, 'run_manifest.json'), 'w');
+fprintf(fid, '%s\n', jsonencode(m));
+fclose(fid);
 end

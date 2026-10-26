@@ -2,7 +2,7 @@ function EEG = cwl_load_brainvision(vhdr)
 % CWL_LOAD_BRAINVISION  Read a BrainVision recording (.vhdr/.vmrk/.eeg) into an
 % EEGLAB-style EEG structure, without EEGLAB. Same result as bva-io's pop_loadbv for
 % continuous binary data: data in single precision scaled by the channel resolution
-% (µV), events with type = marker description (e.g. 'R128'), 'New Segment' and
+% (µV; the channel unit field is honoured), events with type = marker description (e.g. 'R128'), 'New Segment' and
 % 'DC Correction' as 'boundary', latency in samples (1-based).
 %
 %   EEG = cwl_load_brainvision('D:\data\sub-01_task-rest_eeg.vhdr')
@@ -35,6 +35,7 @@ for c = 1:nch
     f = strsplit(hdr.channelinfos{c}, ',', 'CollapseDelimiters', false);
     EEG.chanlocs(c).labels = strrep(f{1}, '\1', ',');
     if numel(f) >= 3 && ~isnan(str2double(f{3})), scale(c) = str2double(f{3}); end
+    if numel(f) >= 4, scale(c) = scale(c) * unit_to_uv(f{4}, EEG.chanlocs(c).labels); end
     % [Coordinates] radius,theta,phi (BrainVision) -> EEGLAB spherical / Cartesian / polar,
     % the conversions of pop_loadbv + pop_chanedit
     if isfield(hdr, 'coordinates') && c <= numel(hdr.coordinates) && ~isempty(hdr.coordinates{c})
@@ -94,6 +95,21 @@ if isfield(ci, 'markerfile')
     ev = ev([ev.latency] >= 1 & [ev.latency] <= EEG.pnts);
     EEG.event   = ev;
     EEG.urevent = rmfield(ev, 'urevent');
+end
+end
+
+function k = unit_to_uv(u, label)
+% factor from the channel's unit (4th field of [Channel Infos]) to microvolts; an empty
+% unit means µV (BrainVision default). Anything spelled with a micro sign / "u" is µV.
+u = strtrim(u);  k = 1;
+switch lower(u)
+    case 'v',  k = 1e6;
+    case 'mv', k = 1e3;
+    case 'nv', k = 1e-3;
+    otherwise
+        if ~isempty(u) && ~strcmpi(u(end), 'v')
+            warning('cwl:unit', 'channel %s: unknown unit "%s", treated as microvolts', label, u);
+        end
 end
 end
 

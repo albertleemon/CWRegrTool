@@ -47,6 +47,13 @@ cwl_diagnose(opts.out_dir);                     % 回归前后对比 + 随机相
 | `vendor/BergenToolboxModified` | 头动模板选择 `m_rp_info`、`m_moving_average`（Moosmann 2009） | GPL v2 |
 | `vendor/firfilt` | 抗混叠滤波器设计 `firws`、`firwsord`、`windows`（EEGLAB firfilt） | GPL |
 
+## 运行安全检查与记录
+- 体积标记间隔与 TR 偏差超过 1% 时（漏标、重复、多余标记）直接报错；确认无误可设 `opts.check_markers = 0`（Python：`--no-marker-check`）。
+- 每次运行先删除输出目录里旧的阶段文件（02/02b/03/04/05），结束时写 `run_manifest.json`（本次实际生成的阶段）；评估脚本只采用清单中列出的阶段。仍建议每组参数使用独立输出目录。
+- BrainVision 通道单位（V/mV/µV/nV）按头文件换算为 µV。
+- CWL 回归的有效区间取自原工具返回的窗口权重（权重 > 0），不再依赖数值是否变化。
+- `EEG.etc.cwl_pipeline` 记录输入 .vhdr、原始标记位置、裁剪起点（`first_kept_raw_sample`、`output_start_raw_s`）、头动文件/阈值/事件数、模板数、回归参数等。
+
 ## 与旧版（依赖 EEGLAB）的一致性
 在同一份合成 BrainVision 记录（16 通道，5000 Hz，40 个 volume，含梯度伪影、心冲击伪影和 CWL 信号）上，分别运行旧版（EEGLAB + bva-io + firfilt）和本版，参数为 OBS 4 / 60 Hz、低通 90 Hz、BCG AAS 开：
 02、02b、03、04、05 五个输出的数据差值均为 **0**，通道、采样率、事件（含裁剪处的 boundary）也相同。

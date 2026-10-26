@@ -30,6 +30,18 @@ def volume_onsets(raw, marker):
     return np.array(sorted(on), int)
 
 
+def check_volume_markers(onsets, tr):
+    """A missing marker leaves a stretch without gradient correction that the trimming
+    would keep; duplicated or extra markers corrupt the templates."""
+    tol = max(5, int(round(0.01 * tr)))
+    bad = np.flatnonzero(np.abs(np.diff(onsets) - tr) > tol)
+    if len(bad):
+        raise SystemExit(
+            f"{len(bad)} volume interval(s) deviate from the TR of {tr} samples by more than {tol} "
+            f"(first at markers {(bad[:5] + 1).tolist()}, intervals {np.diff(onsets)[bad[:5]].tolist()} "
+            "samples): missing, duplicated or extra markers. Fix them or pass --no-marker-check.")
+
+
 def resolve_header(vhdr, out_dir):
     """If the header points to files that no longer exist (e.g. DataFile=RS1.eeg after
     renaming the recording), write a patched header/marker copy that points to the
@@ -60,13 +72,15 @@ def resolve_header(vhdr, out_dir):
 def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         exclude=(), n_templates=25, threshold=0.3, span=None,
         band=(0.33, 125.0), target_fs=500, window_s=4.0, delay_s=0.021, obs_npc=0,
-        obs_hp=70.0, artifact_lowpass=None, bcg_aas_on=False, bcg_hr=None):
+        obs_hp=70.0, artifact_lowpass=None, bcg_aas_on=False, bcg_hr=None,
+        check_markers=True):
     import mne
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     vhdr = resolve_header(vhdr, out_dir)
     raw = mne.io.read_raw_brainvision(vhdr, preload=True, verbose="error")
     fs = raw.info["sfreq"]
+    fs_in = fs
     names = raw.ch_names
     data = raw.get_data() * 1e6                          # volts -> microvolts
 
@@ -84,6 +98,8 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
     if len(onsets) < 3:
         raise SystemExit(f"found {len(onsets)} '{marker}' markers; need the volume markers")
     tr = int(np.median(np.diff(onsets)))
+    if check_markers:
+        check_volume_markers(onsets, tr)
     pre, post = span if span else (0, tr - 1)            # artifact span relative to marker
 
     # 1. gradient artifact: every channel, CWL included
@@ -136,9 +152,20 @@ def run(vhdr, out_dir, rp=None, marker="R128", cwl_regex=r"^CW", ecg="ECG",
         print(f"BCG AAS after CWL: {len(pk)} beats, heart rate {hr:.1f} bpm")
     out = data.copy()
     out[eeg_idx] = eeg
-    info = mne.create_info(names, fs, ch_types="eeg")
-    mne.io.RawArray(out * 1e-6, info, verbose="error").save(
-        out_dir / "cwl_corrected_raw.fif", overwrite=True)
+    # keep what the input had: channel roles, positions, and the events inside the kept span
+    types = ["ecg" if i in ecg_idx else "eeg" if i in eeg_idx else "misc" for i in range(len(names))]
+    info = mne.create_info(names, fs, ch_types=types)
+    out_raw = mne.io.RawArray(out * 1e-6, info, verbose="error")
+    montage = raw.get_montage()
+    if montage is not None:
+        out_raw.set_montage(montage, on_missing="ignore", verbose="error")
+    ann = raw.annotations
+    t = np.array([an["onset"] - raw.first_time for an in ann]) - a / fs_in    # s from the first output sample
+    dur = np.array([an["duration"] for an in ann])
+    keep = (t >= 0) & (t < out.shape[1] / fs)
+    out_raw.set_annotations(mne.Annotations(t[keep], dur[keep],
+                                            [an["description"] for an, k in zip(ann, keep) if k]))
+    out_raw.save(out_dir / "cwl_corrected_raw.fif", overwrite=True)
     np.savez_compressed(out_dir / "cwl_corrected.npz", data=out, ch_names=names, fs=fs,
                         eeg_idx=eeg_idx, cwl_idx=cwl_idx, artifact=art,
                         pre_cwl=pre_cwl)
@@ -157,6 +184,8 @@ if __name__ == "__main__":
     p.add_argument("vhdr"); p.add_argument("out_dir")
     p.add_argument("--rp", help="SPM rp_*.txt or fMRIPrep *_desc-confounds_timeseries.tsv (omit -> moving average)")
     p.add_argument("--marker", default="R128")
+    p.add_argument("--no-marker-check", action="store_true",
+                   help="do not stop on missing/duplicated/uneven volume markers")
     p.add_argument("--cwl-regex", default=r"^CW")
     p.add_argument("--ecg", default="ECG")
     p.add_argument("--exclude", nargs="*", default=[], help="channel names to leave out of the EEG targets")
@@ -177,4 +206,4 @@ if __name__ == "__main__":
     run(a.vhdr, a.out_dir, a.rp, a.marker, a.cwl_regex, a.ecg, a.exclude, a.templates,
         a.threshold, tuple(a.span) if a.span else None, target_fs=a.target_fs,
         obs_npc=a.obs_npc, obs_hp=a.obs_hp, artifact_lowpass=a.artifact_lowpass,
-        bcg_aas_on=a.bcg_aas, bcg_hr=a.bcg_hr)
+        bcg_aas_on=a.bcg_aas, bcg_hr=a.bcg_hr, check_markers=not a.no_marker_check)

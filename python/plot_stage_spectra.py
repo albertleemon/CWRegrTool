@@ -19,6 +19,7 @@ from scipy.io import loadmat
 from scipy.signal import resample_poly, welch
 
 from cwregression import bandpass
+from run_manifest import has_stage
 
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
 
@@ -55,7 +56,7 @@ def stage_spectra(out_dir, vhdr, f_target):
     for fname, lab, col in (("02_gradient_corrected.set", "after gradient template subtraction", "#d62728"),
                             ("02b_obs_corrected.set", "after OBS residual removal", "#ff7f0e")):
         fp = Path(out_dir) / fname
-        if fp.exists():
+        if has_stage(out_dir, fp.stem):
             raw = mne.io.read_raw_eeglab(fp, preload=True, verbose="error")
             out.append((lab, stage_spectrum(raw, 0, t0, t1, f_target), col, "-"))
             del raw
@@ -88,7 +89,7 @@ def main():
         curves.append(("after gradient correction (03)", m["p0"].mean(1), "#d62728", "-"))
     curves += [("after CWL regression", m["p1"].mean(1), "#2ca02c", "-"),
                ("null: regression with random-phase CWL", m["pn"].mean(1), "#1f77b4", "--")]
-    if (d / "05_bcg_aas.set").exists():
+    if has_stage(d, "05_bcg_aas"):
         curves.insert(-1, ("after CWL + BCG AAS (05)", set_spectrum(d / "05_bcg_aas.set", f), "#9467bd", "-"))
     b = (f >= 0.5) & (f <= 125)
     fig, ax = plt.subplots(figsize=(11, 5.5), layout="constrained")

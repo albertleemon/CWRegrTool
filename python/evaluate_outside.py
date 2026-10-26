@@ -33,6 +33,7 @@ import numpy as np
 from scipy.signal import resample_poly, welch
 
 from cwregression import bandpass
+from run_manifest import has_stage
 from metrics import relative_distance
 
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
@@ -84,7 +85,7 @@ def main():
     trim = tuple(int(v) for v in m["etc"]["cwl_pipeline"]["trimmed_to"])
     stages = {"no BCG correction (03)": load_set(d / "03_filtered.set", trim),
               "CWL (04)": load_set(d / "04_cwl_corrected.set")}
-    if (d / "05_bcg_aas.set").exists():
+    if has_stage(d, "05_bcg_aas"):
         stages["CWL + BCG AAS (05)"] = load_set(d / "05_bcg_aas.set")
     on, ox, ofs = load_outside(Path(a.outside).expanduser(), a.crop)
     chans = [c for c in stages["CWL (04)"][0]
