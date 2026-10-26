@@ -51,6 +51,47 @@ python python/run_pipeline.py RAW.vhdr OUT/ --exclude 65 66 \
 python python/diagnose.py OUT/
 ```
 
+### 4.0 速查：必需参数与可选参数
+
+**必需**：`run_pipeline.py` 只有两个位置参数 ——
+
+| 参数 | 说明 |
+|---|---|
+| `vhdr` | 原始 BrainVision `.vhdr` 路径 |
+| `out_dir` | 输出目录（不存在会自动创建；建议放在 BIDS 之外） |
+
+**强烈建议设置**（技术上可选）
+- `--exclude 65 66`：排除未使用的通道，否则它们会被当作 EEG 目标通道。
+- `--rp ...`：有头动文件时给，否则用 moving average 模板（`--threshold` 只在给了 `--rp` 时起作用）。
+
+**其余全部可选**：
+
+| 用途 | 参数 | 默认 |
+|---|---|---|
+| 数据识别 | `--marker`、`--cwl-regex`、`--ecg` | `R128`、`^CW`、`ECG` |
+| 梯度校正 | `--rp`、`--threshold`、`--templates`、`--span PRE POST` | 无、0.3、25、`0 TR-1` |
+| 回归 | `--target-fs` | 500 |
+| 可选改进（不是论文原方法，默认关闭） | `--obs-npc`、`--obs-hp`、`--artifact-lowpass`、`--bcg-aas`、`--bcg-hr` | 0、70、关、关、无 |
+| 安全检查 | `--no-marker-check`（关闭检查） | 检查开启 |
+
+**用法示例**
+```bash
+# 1) 最小用法
+python python/run_pipeline.py RAW.vhdr OUT/
+
+# 2) 论文原方法 + 排除未用通道
+python python/run_pipeline.py RAW.vhdr OUT/ --exclude 65 66
+
+# 3) 加头动信息
+python python/run_pipeline.py RAW.vhdr OUT/ --exclude 65 66 --rp confounds.tsv --threshold 0.15
+
+# 4) 推荐改进组合
+python python/run_pipeline.py RAW.vhdr OUT/ --exclude 65 66 --obs-npc 4 --obs-hp 60 --artifact-lowpass 90
+
+# 5) 再加心跳锁定 AAS
+python python/run_pipeline.py RAW.vhdr OUT/ --exclude 65 66 --obs-npc 4 --obs-hp 60 --artifact-lowpass 90 --bcg-aas --bcg-hr 64
+```
+
 ### 4.1 命令行参数
 
 | 参数 | 默认 | 说明 |
@@ -117,6 +158,33 @@ corrected, artifact = cw_regression(eeg, cwl, fs, window_s=4.0, delay_s=0.021,
 输入是 MATLAB 版的输出目录 `OUT_DIR`（里面有 `03_filtered.set`、`04_cwl_corrected.set`，可选 `02`、`02b`、`05`，以及 `run_manifest.json`）。只有清单里列出的阶段才会被采用；没有清单的旧目录会警告。
 
 最省事：`./evaluate_subject.sh OUT_DIR OUTSIDE.vhdr`（在仓库根目录，一次运行下面 6.1–6.4 全部，输出同时写入 `evaluation.txt`）。
+
+### 6.0 速查：评估与报告脚本的必需与可选参数
+
+| 脚本 | 必需 | 可选 |
+|---|---|---|
+| `denoise_report.py` | `OUT_DIR` | `--outside`（要有相对磁体外的指标就必须给）、`--vhdr`、`--hr`、`--ecg`、`--marker`、`--slice-freq`、`--crop` |
+| `evaluate_outside.py` | `OUT_DIR`、`OUTSIDE.vhdr` | `--crop START END` |
+| `compare_inside_outside.py` | `INSIDE.set`、`OUTSIDE.vhdr`、`OUT.png` | `--channels`、`--start`、`--seconds`、`--also` |
+| `check_bcg_residual.py` | `OUT_DIR` | `--outside`、`--ecg`、`--hr` |
+| `check_removed_signal.py` | `OUT_DIR` | `--outside`、`--channels`、`--k` |
+| `plot_stage_spectra.py` | `OUT_DIR`（且里面要有 `diagnostics_data.mat`） | `--vhdr`、`--title` |
+| `analyze_residual_peaks.py` | `OUT_DIR` | `--confounds`、`--bold`、`--fmin` |
+| `check_volume_alignment.py` | `RAW.vhdr`、`OUT_DIR` | `--channels`、`--marker`、`--k` |
+| `plot_fig3.py` | `OUT.png`、至少一个 `--data`（或 `--mat`） | `--outside`、`--title` |
+| `fmriprep_to_rp.py` | `confounds.tsv`、`rp.txt` | – |
+| `read_siemens_puls.py` | `sub.puls` | `--start`、`--seconds`、`--bin` |
+
+最常用的组合：
+```bash
+# 全部评估（仓库根目录）：两个参数都必需
+./evaluate_subject.sh OUT_DIR OUTSIDE_run-00.vhdr
+#   可选环境变量：CWL_RAW_VHDR=RAW.vhdr（加 raw 阶段）、CWL_BCG_HR=64、PYTHON=...
+# 只要去噪报告
+python python/denoise_report.py OUT_DIR --outside OUTSIDE_run-00.vhdr
+# 去噪报告，完整可选项
+python python/denoise_report.py OUT_DIR --outside OUTSIDE.vhdr --vhdr RAW.vhdr --hr 64 --slice-freq 16.84 --crop 10 300
+```
 
 ### 6.1 `denoise_report.py`：去噪报告
 

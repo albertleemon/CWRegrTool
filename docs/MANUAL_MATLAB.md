@@ -85,6 +85,57 @@ CWL_OBS=4 CWL_OBS_HP=60 CWL_LOWPASS=90 ./run_subject.sh RAW.vhdr OUT_DIR 65,66
 
 ## 6. 参数
 
+### 6.0 速查：必需参数与可选参数
+
+**必需（不给就无法运行）**
+
+| 入口 | 必需项 | 说明 |
+|---|---|---|
+| `cwl_run_pipeline(vhdr, opts)` | `vhdr` | 原始 BrainVision `.vhdr` 的完整路径；`opts` 可以省略（全用默认值） |
+| `run_headless.sh RAW.vhdr OUT_DIR [excl]` | `RAW.vhdr`、`OUT_DIR` | 两个位置参数；第 3 个（排除通道，默认 `65,66`）可省略 |
+| `run_subject.sh RAW.vhdr OUT_DIR [excl]` | 同上 | 同上 |
+| `evaluate_subject.sh OUT_DIR OUTSIDE.vhdr` | `OUT_DIR`、`OUTSIDE.vhdr` | `OUT_DIR` 里必须已有 `03_filtered.set` 和 `04_cwl_corrected.set` |
+| `denoise_report.py OUT_DIR` | `OUT_DIR` | 其余全是可选；但没有 `--outside` 就没有"相对磁体外"的指标 |
+
+**强烈建议设置**（技术上可选，但不设会出问题或写到不该写的地方）
+- `exclude`：数据里未使用的通道（你的数据是 `{'65','66'}`）。不排除的话，它们会被当作 EEG 目标通道参与回归和统计。
+- `out_dir`：默认写到 `<vhdr 目录>/preprocessed`，也就是你的 BIDS 数据目录里；请改到 BIDS 之外，并且每组参数用独立目录。
+- `rp_file`：有 fMRIPrep 头动文件时建议给，否则用 moving average 模板。
+
+**其余全部可选**（不给就用默认值），按用途分组：
+
+| 用途 | 字段 | 默认 |
+|---|---|---|
+| 数据识别 | `marker`、`cwl_regex`、`ecg_label` | `'R128'`、`'^CW'`、`'ECG'` |
+| 梯度校正 | `rp_file`、`threshold`、`n_templates`、`span` | 无、0.3 mm、25、`[0 TR-1]` |
+| 滤波与回归 | `band`、`target_fs`、`window_s`、`delay_s` | `[0.33 125]`、500、4、0.021 |
+| 可选改进（均不是论文原方法，默认关闭） | `obs_npc`、`obs_hp`、`cwl_lowpass`、`bcg_aas`、`bcg_hr` | 0、70、0、0、空 |
+| 安全检查 | `check_markers` | 1（开） |
+
+**用法示例**
+```matlab
+% 1) 最小用法：只给文件，其余默认（输出在数据目录旁的 preprocessed，不推荐）
+EEG = cwl_run_pipeline('/path/run-01_eeg.vhdr');
+
+% 2) 论文原方法（无任何改进）
+opts = struct('exclude', {{'65','66'}}, 'out_dir', '/path/out_paper');
+EEG = cwl_run_pipeline(vhdr, opts);
+
+% 3) 加头动信息
+opts.rp_file = '/path/..._desc-confounds_timeseries.tsv';  opts.threshold = 0.15;
+
+% 4) 推荐改进组合（OBS + 估计伪影低通）
+opts.obs_npc = 4;  opts.obs_hp = 60;  opts.cwl_lowpass = 90;
+
+% 5) 再加心跳锁定 AAS（输出 05_bcg_aas.set）
+opts.bcg_aas = 1;  opts.bcg_hr = 64;
+```
+```bash
+# 命令行：环境变量全部可选
+CWL_OBS=4 CWL_OBS_HP=60 CWL_LOWPASS=90 CWL_RP=confounds.tsv CWL_THRESHOLD=0.15 \
+    ./run_subject.sh RAW.vhdr OUT_DIR 65,66
+```
+
 ### 6.1 `opts` 字段（`cwl_run_pipeline`，全部可选）
 
 | 字段 | 默认 | 说明 |
