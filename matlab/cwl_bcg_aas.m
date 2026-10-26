@@ -56,7 +56,9 @@ else
     [~, im] = max(ac(lo + 1:hi + 1));
     period = (lo + im - 1) / fs;
 end
-[~, pk] = findpeaks(e, 'MinPeakHeight', 0.3 * prctile(e, 99), ...
+es = sort(e);  q = 0.99 * (numel(es) - 1);          % 99th percentile as numpy (no Statistics Toolbox)
+p99 = es(floor(q) + 1) + (q - floor(q)) * (es(min(floor(q) + 2, numel(es))) - es(floor(q) + 1));
+[~, pk] = findpeaks(e, 'MinPeakHeight', 0.3 * p99, ...
                     'MinPeakDistance', round(0.7 * period * fs));
 h = round(0.05 * fs);
 pk = pk(pk - h >= 1 & pk + h <= numel(y));
