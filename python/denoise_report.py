@@ -17,7 +17,10 @@ Indicators per stage (median over EEG channels unless noted)
     step_change_db_1_30    change of 1-30 Hz power relative to the previous stage
     cwl_variance_removed   1 - var(04)/var(03), median over channels
     alpha_topo_r           spatial correlation of 8-13 Hz power with the outside
-Writes into OUT_DIR: denoise_spectra.png, denoise_indicators.png, denoise_topomaps.png,
+    alpha_peak_hz / _db_over_1f / alpha_power_vs_outside_db / alpha_peak_shift_hz
+                           posterior-channel alpha peak above its 1/f background (fit on 4-6 and 15-30 Hz):
+                           frequency (nan if the peak is < 3 dB), height, power relative to the outside (dB), frequency shift
+Writes into OUT_DIR: denoise_spectra.png, denoise_alpha.png, denoise_indicators.png, denoise_topomaps.png,
 denoise_indicators.json / .csv.
 
     python denoise_report.py OUT_DIR [--outside OUTSIDE.vhdr] [--vhdr RAW.vhdr] [--hr BPM]
@@ -43,6 +46,7 @@ from run_manifest import has_stage
 
 EXCLUDE = re.compile(r"^(CW.*|ECG.*|EOG.*|65|66)$", re.I)
 BANDS = [(1, 4), (4, 8), (8, 13), (13, 30), (30, 60), (60, 90), (90, 125)]
+POSTERIOR = ["O1", "O2", "Oz", "POz", "PO3", "PO4", "PO7", "PO8", "P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "Pz"]
 COLORS = {"raw (no correction)": "#7f7f7f", "02 gradient": "#d62728", "02b OBS": "#ff7f0e",
           "03 filtered": "#8c564b", "04 CWL": "#2ca02c", "05 BCG AAS": "#9467bd",
           "outside the scanner": "#000000"}
@@ -81,6 +85,23 @@ def analyse(names, x, fs, chans, pk=None, ecg="ECG", f_slice=16.84):
         A, _, t = locked_average(x[ci], pk, fs)
         r["locked_rms"] = np.sqrt((A[:, (t >= 0) & (t <= 0.6)] ** 2).mean(1))
     return r
+
+
+def alpha_peak(f, p):
+    """Alpha peak of one spectrum above its 1/f background. The background is a line in log-log
+    coordinates fitted on the flanks 4-6 Hz and 15-30 Hz (so a broadband noise difference is not
+    mistaken for an alpha difference). Returns peak frequency (7-14 Hz), peak height (dB above the
+    background), the alpha power above the background (8-13 Hz, µV²) and the background curve."""
+    flank = ((f >= 4) & (f < 6)) | ((f >= 15) & (f <= 30))
+    k = np.polyfit(np.log10(f[flank]), np.log10(p[flank]), 1)
+    bg = 10 ** np.polyval(k, np.log10(np.maximum(f, f[1])))
+    ex = 10 * np.log10(p / bg)
+    sel = (f >= 7) & (f <= 14)
+    i = int(np.argmax(ex[sel]))
+    a = (f >= 8) & (f <= 13)
+    # a "peak" lower than 3 dB above the background is noise, not an alpha peak: no frequency is reported
+    return dict(peak_hz=float(f[sel][i]) if ex[sel][i] >= 3 else float("nan"), peak_db=float(ex[sel][i]),
+                power_above_bg=float(np.clip(p[a] - bg[a], 0, None).sum() * (f[1] - f[0])), bg=bg)
 
 
 def band(f, p, lo, hi):
@@ -174,6 +195,12 @@ def main():
             row["log_spectrum_r"] = float(np.corrcoef(np.log10(pm[bc]), np.log10(po[bc]))[0, 1])
             al = (f >= 8) & (f <= 13)
             row["alpha_topo_r"] = float(np.corrcoef(p[:, al].mean(1), ref["p"][:, al].mean(1))[0, 1])
+        pi = [i for i, c in enumerate(chans) if c in POSTERIOR]
+        if len(pi) >= 3:
+            ap_ = alpha_peak(f, p[pi].mean(0))
+            r["alpha"] = ap_
+            row.update(alpha_peak_hz=ap_["peak_hz"], alpha_peak_db_over_1f=ap_["peak_db"],
+                       alpha_power_over_1f_uV2=ap_["power_above_bg"])
         if prev is not None and "outside" not in label:
             row["step_change_db_1_30"] = float(10 * np.log10(pm[b_130].sum() / prev[b_130].sum()))
         prev = pm
@@ -184,10 +211,15 @@ def main():
         for label, r in R.items():
             if "locked_rms" in r and label != "outside the scanner":
                 ind[label]["bcg_residual_pct"] = float(100 * np.median(r["locked_rms"] / R["03 filtered"]["locked_rms"]))
+    if ref is not None and "alpha" in ref:
+        for label, r in R.items():
+            if "alpha" in r and "outside" not in label and ref["alpha"]["power_above_bg"] > 0 and r["alpha"]["power_above_bg"] > 0:
+                ind[label]["alpha_power_vs_outside_db"] = float(10 * np.log10(r["alpha"]["power_above_bg"] / ref["alpha"]["power_above_bg"]))
+                ind[label]["alpha_peak_shift_hz"] = r["alpha"]["peak_hz"] - ref["alpha"]["peak_hz"]   # nan if either has no peak
     ind["04 CWL"]["cwl_variance_removed"] = float(np.median(1 - R["04 CWL"]["var"] / R["03 filtered"]["var"]))
     (d / "denoise_indicators.json").write_text(json.dumps(ind, indent=2))
     cols = ["rms_1_30_uV", "spectral_distance_pct", "spectral_distance_1_30Hz_pct", "log_spectrum_r", "alpha_topo_r",
-            "slice_peak_db", "bcg_locked_rms_uV", "bcg_residual_pct", "step_change_db_1_30", "cwl_variance_removed"]
+            "alpha_peak_hz", "alpha_peak_db_over_1f", "alpha_power_vs_outside_db", "alpha_peak_shift_hz", "slice_peak_db", "bcg_locked_rms_uV", "bcg_residual_pct", "step_change_db_1_30", "cwl_variance_removed"]
     with open(d / "denoise_indicators.csv", "w", newline="") as fh:
         w = csv.writer(fh); w.writerow(["stage"] + cols + [f"dB_vs_outside_{lo}-{hi}" for lo, hi in BANDS])
         for s, row in ind.items():
@@ -225,6 +257,24 @@ def main():
         ax[1].legend(fontsize=8); ax[1].grid(alpha=.3, lw=.4)
     fig.savefig(d / "denoise_spectra.png", dpi=120)
 
+    # --- figure: posterior alpha, with and without the 1/f background -------------------------------------
+    if all("alpha" in r for r in R.values()):
+        pi = [i for i, c in enumerate(chans) if c in POSTERIOR]
+        z = (f >= 3) & (f <= 20)
+        fig, axa = plt.subplots(1, 2, figsize=(14, 5), layout="constrained")
+        for label, r in R.items():
+            pp = r["p"][pi].mean(0)
+            kw = dict(color=COLORS.get(label), lw=1.6 if "outside" in label else 1.1, ls="--" if "outside" in label else "-")
+            axa[0].semilogy(f[z], pp[z], label=label, **kw)
+            axa[1].plot(f[z], 10 * np.log10(pp[z] / r["alpha"]["bg"][z]), **kw)
+            axa[1].plot(r["alpha"]["peak_hz"], r["alpha"]["peak_db"], "o", color=COLORS.get(label), ms=5)
+        axa[0].set(xlabel="Frequency (Hz)", ylabel="Power (µV²/Hz)", title=f"Posterior channels ({len(pi)}), 3-20 Hz")
+        axa[1].set(xlabel="Frequency (Hz)", ylabel="dB above the 1/f background", title="Alpha peak above 1/f (background fitted on 4-6 and 15-30 Hz)")
+        for axx in axa:
+            axx.axvspan(8, 13, color="0.9", zorder=0); axx.grid(alpha=.3, lw=.4)
+        axa[0].legend(fontsize=8)
+        fig.savefig(d / "denoise_alpha.png", dpi=120)
+
     # --- figure 2: indicators per stage ---------------------------------------------------------------
     stages = list(R)
     panels = [("spectral_distance_pct", "Spectral distance to outside (%)\nlower = better"),
@@ -232,9 +282,10 @@ def main():
               ("bcg_locked_rms_uV", "Heartbeat-locked RMS (µV)\nlower = better"),
               ("slice_peak_db", "Slice-harmonic peaks (dB over background)\n0 = none"),
               ("log_spectrum_r", "Log-spectrum correlation with outside (1-45 Hz)\nhigher = better"),
-              ("alpha_topo_r", "Alpha (8-13 Hz) topography correlation\nhigher = better")]
+              ("alpha_topo_r", "Alpha (8-13 Hz) topography correlation\nhigher = better"),
+              ("alpha_power_vs_outside_db", "Posterior alpha power above 1/f vs outside (dB)\n0 = same as outside")]
     panels = [(k, t) for k, t in panels if any(k in ind[s] for s in stages)]
-    fig, axs = plt.subplots(2, 3, figsize=(15, 8), layout="constrained")
+    fig, axs = plt.subplots(3, 3, figsize=(15, 11), layout="constrained")
     for axp, (k, t) in zip(axs.ravel(), panels):
         vals = [ind[s].get(k, np.nan) for s in stages]
         if k in ("spectral_distance_pct", "rms_1_30_uV"):
@@ -287,7 +338,7 @@ def main():
         print("wrote denoise_topomaps.png")
     else:
         print(f"only {len(tc)} channels with a standard position: scalp maps skipped")
-    print("wrote", d / "denoise_spectra.png", ",", "denoise_indicators.png/.json/.csv")
+    print("wrote", d / "denoise_spectra.png", ",", "denoise_alpha.png, denoise_indicators.png/.json/.csv")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.3.0
+- `denoise_report`: posterior-channel alpha peak above the 1/f background (frequency, height, power vs outside, shift), `denoise_alpha.png`. Both recordings are eyes-closed rest, so a direct alpha comparison is meaningful; EO/EC reactivity (paper Jaccard) is not possible without eyes-open segments.
 - Manuals: `docs/MANUAL_MATLAB.md` and `docs/MANUAL_PYTHON.md`.
 - `python/denoise_report.py` (run by `evaluate_subject.sh`): indicators per step (spectral distance to outside,
   RMS, band powers and dB vs outside, slice-harmonic peaks, heartbeat-locked residual, step-wise change, CWL variance

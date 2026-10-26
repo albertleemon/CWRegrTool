@@ -201,7 +201,7 @@ python python/denoise_report.py OUT_DIR --outside OUTSIDE.vhdr [--vhdr RAW.vhdr]
 | `--slice-freq` | 层频率（Hz），用于"层频率谐波残峰"指标，默认 16.84 |
 | `--crop` | 只使用磁体外记录的这一段（秒） |
 
-输出：`denoise_spectra.png`（每一步的平均谱 + 相对磁体外的 dB 差）、`denoise_indicators.png/.json/.csv`（指标，含义见 `docs/MANUAL_MATLAB.md` 第 10 节）、`denoise_topomaps.png`（每一步的头皮分布图：1–30 Hz RMS、心跳锁定 RMS、相对磁体外的 dB）。头皮图需要至少 16 个通道有标准 10-05 位置，否则跳过。所有阶段在相同样本和相同 EEG 通道上比较，先经过与流程相同的 0.33–125 Hz 带通和 500 Hz 降采样。
+输出：`denoise_spectra.png`（每一步的平均谱 + 相对磁体外的 dB 差）、`denoise_alpha.png`（后部通道 alpha 峰，扣除 1/f 背景）、`denoise_indicators.png/.json/.csv`（指标，含义见 `docs/MANUAL_MATLAB.md` 第 10 节）、`denoise_topomaps.png`（每一步的头皮分布图：1–30 Hz RMS、心跳锁定 RMS、相对磁体外的 dB）。头皮图需要至少 16 个通道有标准 10-05 位置，否则跳过。所有阶段在相同样本和相同 EEG 通道上比较，先经过与流程相同的 0.33–125 Hz 带通和 500 Hz 降采样。
 
 ### 6.2 其他评估脚本
 

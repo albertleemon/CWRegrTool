@@ -239,6 +239,7 @@ cwl_diagnose('/path/to/out')     % 写 diagnostics.png/.json/diagnostics_data.ma
 | `bcg_residual.png` / `.json`、`bcg_topomap.png` | 心跳锁定残差（03、04、[05]、磁体外）和头皮图 |
 | `removed_signal.json` | CWL 去除成分与邻近电极的相干性 |
 | `denoise_spectra.png` | **每一步**（raw/02/02b/03/04/05/磁体外）的平均谱 + 相对磁体外的 dB 差 |
+| `denoise_alpha.png` | 后部通道 3–20 Hz 各步谱，以及扣除 1/f 后的 alpha 峰 |
 | `denoise_indicators.png/.json/.csv` | 去噪指标（第 10 节） |
 | `denoise_topomaps.png` | 每一步的头皮分布图 |
 | `evaluation.txt` | 全部终端输出 |
@@ -263,6 +264,8 @@ python python/denoise_report.py OUT_DIR --outside OUTSIDE.vhdr [--vhdr RAW.vhdr]
 | `cwl_variance_removed` | 1 − var(04)/var(03) | 仅作参考 |
 | `log_spectrum_r` | 与磁体外对数谱的相关（1–45 Hz） | 越接近 1 越好 |
 | `alpha_topo_r` | 8–13 Hz 功率地形与磁体外的相关 | 越接近 1 越好 |
+| `alpha_peak_hz`、`alpha_peak_db_over_1f` | 后部通道 alpha 峰频率和峰高（扣除 1/f 背景，背景用 4–6 与 15–30 Hz 拟合）；峰高低于 3 dB 时不报频率（nan） | 与磁体外接近 |
+| `alpha_power_vs_outside_db`、`alpha_peak_shift_hz` | 扣除 1/f 后的 alpha 功率相对磁体外的 dB，以及峰频率差 | 接近 0；明显为负说明 alpha 偏低（状态不同或被过度去除，需结合 `check_removed_signal` 判断） |
 
 解读时注意：
 - 磁体外参考不是纯净真值：常有 50 Hz 工频峰和 <1 Hz 漂移，状态也与磁体内不同。
