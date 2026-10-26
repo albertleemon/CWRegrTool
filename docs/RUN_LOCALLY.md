@@ -90,3 +90,13 @@ conda activate cwl            # 或你装了依赖的 Python 环境
 例：`CWL_OBS_HP=60 CWL_LOWPASS=90 ./run_subject.sh RAW.vhdr OUT 65,66`
 每次运行的设置写在 `OUT/settings.txt`，也记录在 `04_cwl_corrected.set` 的 `EEG.etc.cwl_pipeline` 里。
 Python 版对应：`--obs-npc`、`--obs-hp`、`--artifact-lowpass`。
+
+
+## 去噪效果报告（v0.3.0）
+`./evaluate_subject.sh OUT OUTSIDE.vhdr` 现在最后一步运行 `python/denoise_report.py`（设 `CWL_RAW_VHDR=RAW.vhdr` 可加入未校正的 raw 阶段）：
+| 文件 | 内容 |
+|---|---|
+| `denoise_spectra.png` | **每一步**（raw / 02 / 02b / 03 / 04 / 05 / 磁体外）的平均谱，及各步相对磁体外的 dB 差 |
+| `denoise_indicators.png` / `.json` / `.csv` | 谱距离（式 4，0.5–125 与 1–30 Hz）、1–30 Hz RMS、各频段功率及相对磁体外 dB、层频率谐波残峰、心跳锁定残差（µV 与占 03 的 %）、每步 1–30 Hz 变化、CWL 去除方差比例、对数谱相关、alpha 地形相关 |
+| `denoise_topomaps.png` | 头皮分布图（每一步一列）：1–30 Hz RMS、心跳锁定 RMS、相对磁体外的 dB |
+单独运行：`python python/denoise_report.py OUT --outside OUTSIDE.vhdr [--vhdr RAW.vhdr] [--hr 64] [--slice-freq 16.84]`。
