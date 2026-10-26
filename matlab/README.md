@@ -61,3 +61,5 @@ cwl_diagnose(opts.out_dir);                     % 回归前后对比 + 随机相
 
 
 完整使用手册：`../docs/MANUAL_MATLAB.md`（参数、输出、评估与指标解读、常见问题）。去噪报告由 `python/denoise_report.py` 生成（MATLAB 流程之后运行，见手册第 9 节）。
+
+与原论文方法的区别和改进：`../docs/METHODS_VS_PAPER.md`。
