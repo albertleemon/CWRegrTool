@@ -68,10 +68,11 @@
 | | MATLAB（`matlab/`） | Python（`python/`） |
 |---|---|---|
 | 梯度校正 | `cwl_gradient_correct.m`（与 Bergen 的 `CorrectionMatrix` 同一逻辑，无 GUI）；权重矩阵直接使用 Bergen 的 `m_rp_info` | `gradient_correction.py` |
-| CWL 回归 | **原作者的 CWRegrTool**（`pop_cwregression`） | `cwregression.py`（我按论文和 MATLAB 代码移植） |
+| CWL 回归 | **原作者的 CWRegrTool**（`run_cwregression`，经 `cwl_cwregression.m` 调用） | `cwregression.py`（我按论文和 MATLAB 代码移植） |
 | 窗口边缘 | 原工具在记录首尾不校正，脚本按实际改动的样本自动裁掉 | 首尾窗口保持满权重，边缘也被校正 |
 | 评估指标 | `cwl_eoec_metrics.m` | `metrics.py` |
-| 状态 | **未在 MATLAB 中运行过**（我没有 MATLAB 环境），请先用小数据试 | 合成数据端到端测试通过 |
+| 依赖 | 只需 MATLAB + Signal Processing Toolbox；其余全部在 `matlab/` 内（见 `matlab/README.md`），不需要 EEGLAB | `python/requirements.txt` |
+| 状态 | 已在真实数据（sub-BOR5A、sub-kvhDR）上运行 | 合成数据端到端测试通过 |
 
 ## 4. 用真实数据跑之前先确认
 

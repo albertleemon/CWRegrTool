@@ -1,0 +1,4 @@
+Unmodified copies of firws.m, firwsord.m and windows.m from the EEGLAB firfilt plugin
+(https://github.com/sccn/firfilt, commit ff8227f8; (c) Andreas Widmann, University of
+Leipzig, GPL v2 or later, see the file headers and ../BergenToolboxModified/gpl-v2-license.txt).
+Used by cwl_resample.m to build the same anti-aliasing filter as EEGLAB's pop_resample.

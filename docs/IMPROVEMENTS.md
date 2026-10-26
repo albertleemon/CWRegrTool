@@ -133,6 +133,7 @@
 
 - MATLAB 版无界面运行（`run_subject.sh`、`run_headless.sh`），全部日志写入 `matlab_run.log`；每次运行的参数写入 `settings.txt` 和 `EEG.etc.cwl_pipeline`。
 - Python 版完整移植（梯度校正、OBS、CWL 回归、指标），14 个自动测试；**Python 版尚未在真实数据上运行**。
+- **MATLAB 版独立化**：`matlab/` 自带全部依赖（BrainVision 读取、.set/.fdt 读写、与 `pop_resample` 相同的降采样、原作者 CWL 回归核心、Bergen 模板选择、firfilt 滤波器设计），只需 MATLAB + Signal Processing Toolbox，不再需要 EEGLAB。在合成 BrainVision 记录上与旧版（EEGLAB + bva-io + firfilt）逐阶段比较：02、02b、03、04、05 五个输出数据差值均为 0，事件也相同。
 - 兼容性修正：BrainVision 头文件中 `DataFile` 与实际文件名不符时自动处理；R2024b 的 `filtfilt` 二阶节警告；EEGLAB `firfilt` 子模块自动安装；关闭 EEGLAB 启动时的联网检查（在用户机器上导致内存堆损坏）。
 
 ---

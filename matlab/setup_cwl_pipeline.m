@@ -1,65 +1,32 @@
-function setup_cwl_pipeline(toolbox_dir)
-% SETUP_CWL_PIPELINE  Download EEGLAB + bva-io (once) and set up the MATLAB path.
+function setup_cwl_pipeline()
+% SETUP_CWL_PIPELINE  Put this self-contained pipeline on the MATLAB path.
 %
-%   setup_cwl_pipeline                 % toolboxes go to <repo>/matlab/toolboxes
-%   setup_cwl_pipeline('D:\toolboxes') % or any folder
+%   cd CWRegrTool/matlab ; setup_cwl_pipeline
 %
-% Needs git on the system path for the first run (or clone the two repositories
-% yourself into <toolbox_dir>/eeglab and <toolbox_dir>/eeglab/plugins/bva-io).
-% Also installs EEGLAB's firfilt plugin (needed by pop_resample).
-% Also needs the Signal Processing Toolbox (butter, filtfilt, resample, pwelch).
+% Needs only MATLAB and the Signal Processing Toolbox. Everything else is in this folder:
+%   .                     the pipeline (cwl_*.m), BrainVision reader, .set reader/writer
+%   vendor/CWRegrTool     CWL regression core (van der Meer et al. 2016), MIT
+%   vendor/BergenToolboxModified  head-motion template selection (Moosmann 2009), GPL v2
+%   vendor/firfilt        anti-aliasing filter design (EEGLAB firfilt), GPL
+% No EEGLAB, no download, no internet. The folder can be copied anywhere.
 
 here = fileparts(mfilename('fullpath'));
-root = fileparts(here);                              % repo root = CWRegrTool
-if nargin < 1, toolbox_dir = fullfile(here, 'toolboxes'); end
-if ~exist(toolbox_dir, 'dir'), mkdir(toolbox_dir); end
-
-eeglab_dir = fullfile(toolbox_dir, 'eeglab');
-if ~exist(eeglab_dir, 'dir')
-    run_git(['clone --depth 1 https://github.com/sccn/eeglab.git "' eeglab_dir '"']);
-end
-bva_dir = fullfile(eeglab_dir, 'plugins', 'bva-io');
-if ~exist(bva_dir, 'dir')
-    run_git(['clone --depth 1 https://github.com/sccn/bva-io.git "' bva_dir '"']);
-end
-
-ensure_firfilt(eeglab_dir);                % pop_resample needs it; a --depth 1 clone lacks plugins
-addpath(eeglab_dir);
-disable_eeglab_online_check(eeglab_dir);   % no web calls at startup (can crash some MATLAB installs)
-eeglab nogui;
-addpath(bva_dir);                                    % no genpath: it would add the .git folders
-addpath(root);                                       % CWRegrTool (+tools, +misc, pop_cwregression)
-addpath(here);                                       % this pipeline
+addpath(here);
+addpath(fullfile(here, 'vendor', 'CWRegrTool'));             % no genpath: +misc/+tools are packages
 addpath(fullfile(here, 'vendor', 'BergenToolboxModified'));
+addpath(fullfile(here, 'vendor', 'firfilt'));
 check_signal_toolbox();
-fprintf('CWL pipeline ready. Next: EEG = cwl_run_pipeline(''<path>/NB.vhdr'', opts);\n');
+others = setdiff(which('-all', 'run_cwregression'), {fullfile(here, 'vendor', 'CWRegrTool', 'run_cwregression.m')});
+if ~isempty(others)
+    fprintf('note: other copies on the path (unused, this folder comes first): %s\n', strjoin(others, ', '));
 end
-
-function run_git(args)
-[st, msg] = system(['git ' args]);
-if st ~= 0, error('git failed: %s\nInstall git or clone manually.', msg); end
-end
-
-function disable_eeglab_online_check(eeglab_dir)
-% EEGLAB queries sccn.ucsd.edu for plugin versions at every start. On some systems that
-% web call corrupts the MATLAB heap ("malloc(): invalid size") and kills the session.
-% Set option_checkversion = 0 in ~/eeg_options.m (a .bak copy is kept).
-opt = fullfile(getenv('HOME'), 'eeg_options.m');
-if ~exist(opt, 'file')
-    copyfile(fullfile(eeglab_dir, 'functions', 'adminfunc', 'eeg_optionsbackup.m'), opt);
-end
-t  = fileread(opt);
-t2 = regexprep(t, 'option_checkversion\s*=\s*1', 'option_checkversion = 0');
-if ~strcmp(t, t2)
-    copyfile(opt, [opt '.bak']);
-    fid = fopen(opt, 'w'); fwrite(fid, t2, 'char'); fclose(fid);
-    fprintf('EEGLAB online version check disabled in %s (backup: %s.bak)\n', opt, opt);
-end
+fprintf('CWL pipeline ready (%s). Next: EEG = cwl_run_pipeline(''<path>/run.vhdr'', opts);\n', here);
 end
 
 function check_signal_toolbox()
 % Fail early, with a clear message, if the Signal Processing Toolbox does not work.
 % A failure here means the MATLAB path itself is broken (see docs/RUN_LOCALLY.md).
+if exist('OCTAVE_VERSION', 'builtin'), return; end      % Octave: only used for testing
 assert(license('test', 'Signal_Toolbox') ~= 0, 'Signal Processing Toolbox required');
 checks = {'butter',   @() butter(2, 0.1, 'high'); ...
           'filtfilt', @() filtfilt(1, 1, randn(100, 1)); ...
@@ -73,19 +40,4 @@ if ~isempty(bad)
     error('cwl:signal', 'Signal Processing Toolbox functions fail in %s (%s) -- MATLAB path broken?\n%s', ...
           version, matlabroot, strjoin(bad, newline));
 end
-end
-
-function ensure_firfilt(eeglab_dir)
-% EEGLAB ships firfilt as a git submodule; a plain clone leaves plugins/firfilt empty.
-ff = fullfile(eeglab_dir, 'plugins', 'firfilt');
-if exist(fullfile(ff, 'pop_firwsord.m'), 'file'), return; end
-if exist(fullfile(eeglab_dir, '.git'), 'dir')
-    system(sprintf('git -C "%s" submodule update --init --depth 1 plugins/firfilt', eeglab_dir));
-end
-if ~exist(fullfile(ff, 'pop_firwsord.m'), 'file')
-    if exist(ff, 'dir') && numel(dir(ff)) <= 2, rmdir(ff); end   % empty placeholder
-    run_git(['clone --depth 1 https://github.com/sccn/firfilt.git "' ff '"']);
-end
-assert(exist(fullfile(ff, 'pop_firwsord.m'), 'file') > 0, 'could not install firfilt into %s', ff);
-fprintf('installed EEGLAB firfilt plugin in %s\n', ff);
 end

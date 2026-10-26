@@ -36,13 +36,13 @@ function EEG = cwl_run_pipeline(vhdr, opts)
 %                   (default 0 = off, e.g. 90): above that frequency the EEG stays exactly
 %                   as before the regression (no loop noise added, nothing removed)
 %
-%   Requires EEGLAB + bva-io (pop_loadbv), the Signal Processing Toolbox, and
-%   this repository on the path (run setup_cwl_pipeline first).
+%   Requires only MATLAB + the Signal Processing Toolbox; everything else is in this
+%   folder (run setup_cwl_pipeline first to set the path). No EEGLAB needed: the
+%   outputs are EEGLAB datasets (.set + .fdt) that EEGLAB and MNE can open.
 
 if nargin < 2, opts = struct(); end
 d = @(f, v) setdefault(opts, f, v);
-[vdir, vname, vext] = fileparts(vhdr);
-out_dir     = d('out_dir', fullfile(vdir, 'preprocessed'));
+out_dir     = d('out_dir', fullfile(fileparts(vhdr), 'preprocessed'));
 marker      = d('marker', 'R128');
 rp_file     = d('rp_file', []);
 cwl_regex   = d('cwl_regex', '^CW');
@@ -62,9 +62,7 @@ bcg_hr      = d('bcg_hr', []);
 if ~exist(out_dir, 'dir'), mkdir(out_dir); end
 
 %% 0. import
-[vdir, vfile] = fix_header(vdir, [vname vext], out_dir);
-EEG = pop_loadbv(vdir, vfile);
-EEG = eeg_checkset(EEG);
+EEG = cwl_load_brainvision(vhdr);
 fs  = EEG.srate;
 labels = {EEG.chanlocs.labels};
 cwl_idx = find(~cellfun('isempty', regexp(labels, cwl_regex, 'once')));
@@ -95,8 +93,7 @@ EEG.pnts  = size(EEG.data, 2);
 EEG.times = (0:EEG.pnts-1) / fs * 1000;  EEG.xmax = EEG.times(end) / 1000;
 EEG.event = EEG.event([EEG.event.latency] >= a & [EEG.event.latency] <= b);
 for i = 1:numel(EEG.event), EEG.event(i).latency = EEG.event(i).latency - a + 1; end
-EEG = eeg_checkset(EEG, 'eventconsistency');
-EEG = pop_saveset(EEG, 'filename', '02_gradient_corrected.set', 'filepath', out_dir);
+EEG = cwl_saveset(EEG, out_dir, '02_gradient_corrected.set');
 
 %% 1b. optional: OBS removal of the gradient residual (Niazy et al. 2005), all channels
 obs_frac = [];
@@ -109,21 +106,20 @@ if obs_npc > 0
     end
     fprintf('OBS residual removal (%d components, >%g Hz): median %.0f%% of the residual removed\n', ...
             obs_npc, obs_hp, 100 * median(obs_frac));
-    EEG = pop_saveset(EEG, 'filename', '02b_obs_corrected.set', 'filepath', out_dir);
+    EEG = cwl_saveset(EEG, out_dir, '02b_obs_corrected.set');
 end
 
 %% 2. identical zero-phase band-pass on every channel, then resample
 [z, p, k] = butter(3, band / (fs / 2), 'bandpass');
 [sos, g]  = zp2sos(z, p, k);
 EEG.data  = cwl_sosfiltfilt(sos, g, double(EEG.data).').';
-EEG = pop_resample(EEG, target_fs);              % anti-aliased resample (EEGLAB firfilt plugin)
+EEG = cwl_resample(EEG, target_fs);              % anti-aliased, same as EEGLAB pop_resample
 assert(~any(isnan(EEG.data(:))), 'NaN in data before CWL regression');
-EEG = pop_saveset(EEG, 'filename', '03_filtered.set', 'filepath', out_dir);
+EEG = cwl_saveset(EEG, out_dir, '03_filtered.set');
 
 %% 3. CWL regression (EEG channels only), original CWRegrTool code
 before = EEG.data(eeg_idx, :);
-EEG = pop_cwregression(EEG, EEG.srate, window_s, delay_s, 1, 'hann', ...
-                       cwl_idx, eeg_idx, 'taperedhann', 0);
+EEG = cwl_cwregression(EEG, window_s, delay_s, cwl_idx, eeg_idx);
 % the tool leaves the first ~half window and last ~1-3 windows uncorrected:
 % keep only the samples it actually changed (determined before any artifact low-pass,
 % which would smear tiny values into the uncorrected edges)
@@ -139,13 +135,13 @@ if cwl_lowpass > 0
     fprintf('CWL artifact estimate low-passed at %g Hz before subtraction\n', cwl_lowpass);
 end
 fprintf('CWL regression changed samples %d..%d of %d\n', changed(1), changed(end), EEG.pnts);
-EEG = pop_select(EEG, 'point', [changed(1) changed(end)]);
+EEG = crop_points(EEG, changed(1), changed(end));
 
 EEG.etc.cwl_pipeline = struct('method', method, 'obs_npc', obs_npc, 'obs_hp', obs_hp, 'obs_frac', obs_frac, ...
     'cwl_lowpass', cwl_lowpass, 'n_volumes', nvol, 'tr_samples', TR, ...
     'span', span, 'band', band, 'eeg_channels', {labels(eeg_idx)}, ...
     'cwl_channels', {labels(cwl_idx)}, 'trimmed_to', [changed(1) changed(end)]);
-EEG = pop_saveset(EEG, 'filename', '04_cwl_corrected.set', 'filepath', out_dir);
+EEG = cwl_saveset(EEG, out_dir, '04_cwl_corrected.set');
 
 %% 4. optional: heartbeat-locked AAS of the remaining BCG (Allen et al. 1998)
 if bcg_aas
@@ -154,7 +150,7 @@ if bcg_aas
     EEG.data(eeg_idx, :) = y;
     fprintf('BCG AAS after CWL: %d beats, heart rate %.1f bpm\n', numel(pk), hr);
     EEG.etc.cwl_pipeline.bcg_aas = struct('n_beats', numel(pk), 'heart_rate_bpm', hr);
-    EEG = pop_saveset(EEG, 'filename', '05_bcg_aas.set', 'filepath', out_dir);
+    EEG = cwl_saveset(EEG, out_dir, '05_bcg_aas.set');
 end
 end
 
@@ -162,34 +158,24 @@ function v = setdefault(s, f, v)
 if isfield(s, f) && ~isempty(s.(f)), v = s.(f); end
 end
 
-function [vdir, vfile] = fix_header(vdir, vfile, out_dir)
-% If the header names files that do not exist (e.g. DataFile=RS1.eeg after the
-% recording was renamed), build a patched copy in out_dir/_patched that points to the
-% sibling .eeg/.vmrk with the same stem (the .eeg is symlinked on Linux/macOS, copied on Windows).
-h = fileread(fullfile(vdir, vfile));
-data = strtrim(regexp(h, 'DataFile=([^\r\n]+)', 'tokens', 'once'));
-mrk  = strtrim(regexp(h, 'MarkerFile=([^\r\n]+)', 'tokens', 'once'));
-if exist(fullfile(vdir, data{1}), 'file') && exist(fullfile(vdir, mrk{1}), 'file'), return; end
-[~, stem] = fileparts(vfile);
-eeg = fullfile(vdir, [stem '.eeg']);  vmrk = fullfile(vdir, [stem '.vmrk']);
-assert(exist(eeg, 'file') && exist(vmrk, 'file'), ...
-    'header points to %s / %s which are missing, and no %s.eeg/.vmrk next to it', data{1}, mrk{1}, stem);
-tmp = fullfile(out_dir, '_patched');  if ~exist(tmp, 'dir'), mkdir(tmp); end
-hh = regexprep(h, 'DataFile=[^\r\n]+', ['DataFile=' stem '.eeg']);
-hh = regexprep(hh, 'MarkerFile=[^\r\n]+', ['MarkerFile=' stem '.vmrk']);
-mm = regexprep(fileread(vmrk), 'DataFile=[^\r\n]+', ['DataFile=' stem '.eeg']);
-write_text(fullfile(tmp, [stem '.vhdr']), hh);
-write_text(fullfile(tmp, [stem '.vmrk']), mm);
-target = fullfile(tmp, [stem '.eeg']);
-if ~exist(target, 'file')
-    if isunix, system(['ln -s "' eeg '" "' target '"']); else, copyfile(eeg, target); end
+function EEG = crop_points(EEG, a, b)
+% keep samples a..b (like EEGLAB pop_select 'point'); boundary events mark the cuts
+size_before = EEG.pnts;
+EEG.data  = EEG.data(:, a:b);
+EEG.pnts  = b - a + 1;
+EEG.xmax  = EEG.xmin + (EEG.pnts - 1) / EEG.srate;
+EEG.times = linspace(EEG.xmin * 1000, EEG.xmax * 1000, EEG.pnts);
+n  = numel(EEG.event);
+ev = EEG.event([EEG.event.latency] >= a & [EEG.event.latency] <= b);
+for i = 1:numel(ev), ev(i).latency = ev(i).latency - a + 1; end
+if n
+    bnd = EEG.event(1);  bnd = structfun(@(v) [], bnd, 'UniformOutput', false);
+    bnd.type = 'boundary';
+    b0 = bnd;  b0.latency = 0.5;               b0.duration = a - 1;
+    b1 = bnd;  b1.latency = EEG.pnts + 0.5;    b1.duration = size_before - b;
+    ev = [b0 ev b1];
 end
-fprintf('header pointed to %s; using %s.eeg instead\n', data{1}, stem);
-vdir = tmp;  vfile = [stem '.vhdr'];
-end
-
-function write_text(f, t)
-fid = fopen(f, 'w', 'n', 'UTF-8'); fwrite(fid, t, 'char'); fclose(fid);
+EEG.event = ev;
 end
 
 function rp_txt = motion_to_rp(f, out_dir, nvol, threshold)

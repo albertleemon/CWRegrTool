@@ -1,0 +1,5 @@
+Unmodified copies of the carbon-wire-loop regression core of CWRegrTool
+(van der Meer et al. 2016; the files in the repository root: run_cwregression.m,
+m_do_taperedhann.m, m_do_slidingwindow.m, m_do_everything.m, hann.m, +misc, +tools;
+MIT license, see LICENSE.txt), so that matlab/ runs on its own. The EEGLAB plugin
+wrapper pop_cwregression.m is replaced by ../../cwl_cwregression.m (same computation).

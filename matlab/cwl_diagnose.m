@@ -9,8 +9,8 @@ function s = cwl_diagnose(out_dir)
 % trace (Oz), % variance removed per channel and band-power ratios, plus a null
 % control: the same regression with phase-randomised CWL (over-fitting floor).
 
-pre  = pop_loadset('filename', '03_filtered.set', 'filepath', out_dir);
-post = pop_loadset('filename', '04_cwl_corrected.set', 'filepath', out_dir);
+pre  = cwl_loadset(fullfile(out_dir, '03_filtered.set'));
+post = cwl_loadset(fullfile(out_dir, '04_cwl_corrected.set'));
 info = post.etc.cwl_pipeline;
 fs   = post.srate;
 lab  = {post.chanlocs.labels};
@@ -40,7 +40,7 @@ F   = fft(c);
 F(2:half+1, :)       = F(2:half+1, :) .* ph;
 F(end-half+1:end, :) = F(end-half+1:end, :) .* conj(flipud(ph));
 nul = pre;  nul.data(cwl, :) = real(ifft(F)).';
-nul = pop_cwregression(nul, fs, 4, 0.021, 1, 'hann', cwl, eeg, 'taperedhann', 0);
+nul = cwl_cwregression(nul, 4, 0.021, cwl, eeg);
 if isfield(info, 'cwl_lowpass') && info.cwl_lowpass > 0      % same artifact low-pass as the real run
     [z, p, k] = butter(8, info.cwl_lowpass / (fs / 2), 'low');
     [sos, g]  = zp2sos(z, p, k);
