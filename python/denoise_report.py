@@ -237,6 +237,8 @@ def main():
     fig, axs = plt.subplots(2, 3, figsize=(15, 8), layout="constrained")
     for axp, (k, t) in zip(axs.ravel(), panels):
         vals = [ind[s].get(k, np.nan) for s in stages]
+        if k in ("spectral_distance_pct", "rms_1_30_uV"):
+            vals = [v if v > 0 else np.nan for v in vals]       # log axis: 0 (the reference itself) cannot be drawn
         axp.bar(range(len(stages)), vals, color=[COLORS.get(s) for s in stages])
         axp.set_xticks(range(len(stages)), [s.replace(" (no correction)", "").replace("outside the scanner", "outside") for s in stages],
                        rotation=40, ha="right", fontsize=8)
