@@ -18,3 +18,6 @@ python python/run_pipeline.py NB.vhdr out/ --rp rp_run01.txt --exclude 65 66
 ```
 Outputs `cwl_corrected_raw.fif`, `cwl_corrected.npz`, `pipeline_log.json`.
 See `docs/PIPELINE.md` for the logic and a pre-flight checklist; the MATLAB version is in `matlab/`.
+
+
+Full manual (Chinese): `docs/MANUAL_PYTHON.md` — pipeline, all options, evaluation/report scripts (`denoise_report.py` etc., which read the MATLAB `.set` outputs), tests, troubleshooting.

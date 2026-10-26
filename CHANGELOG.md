@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.3.0
+- Manuals: `docs/MANUAL_MATLAB.md` and `docs/MANUAL_PYTHON.md`.
 - `python/denoise_report.py` (run by `evaluate_subject.sh`): indicators per step (spectral distance to outside,
   RMS, band powers and dB vs outside, slice-harmonic peaks, heartbeat-locked residual, step-wise change, CWL variance
   removed, log-spectrum and alpha-topography correlation), mean spectrum of EVERY step (raw/02/02b/03/04/05/outside),

@@ -58,3 +58,6 @@ cwl_diagnose(opts.out_dir);                     % 回归前后对比 + 随机相
 在同一份合成 BrainVision 记录（16 通道，5000 Hz，40 个 volume，含梯度伪影、心冲击伪影和 CWL 信号）上，分别运行旧版（EEGLAB + bva-io + firfilt）和本版，参数为 OBS 4 / 60 Hz、低通 90 Hz、BCG AAS 开：
 02、02b、03、04、05 五个输出的数据差值均为 **0**，通道、采样率、事件（含裁剪处的 boundary）也相同。
 如果 MATLAB 路径里还有旧的 EEGLAB 或 CWRegrTool，也不会冲突：`setup_cwl_pipeline` 会把本文件夹放在路径最前面，那些同名文件内容也相同。
+
+
+完整使用手册：`../docs/MANUAL_MATLAB.md`（参数、输出、评估与指标解读、常见问题）。去噪报告由 `python/denoise_report.py` 生成（MATLAB 流程之后运行，见手册第 9 节）。
