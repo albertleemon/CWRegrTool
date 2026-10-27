@@ -1,6 +1,7 @@
 # Changelog
 
 ## v0.3.0
+- `docs/METHODS_VS_PAPER.html`: self-contained HTML version of the paper comparison (flow diagram, tables, bar charts, light/dark).
 - `docs/METHODS_VS_PAPER.md`: the paper in brief, what is unchanged, every difference/improvement with evidence, suggested Methods wording.
 - `denoise_report`: posterior-channel alpha peak above the 1/f background (frequency, height, power vs outside, shift), `denoise_alpha.png`. Both recordings are eyes-closed rest, so a direct alpha comparison is meaningful; EO/EC reactivity (paper Jaccard) is not possible without eyes-open segments.
 - Manuals: `docs/MANUAL_MATLAB.md` and `docs/MANUAL_PYTHON.md`.

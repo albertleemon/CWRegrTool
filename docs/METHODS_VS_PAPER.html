@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CWL 流程与原论文对照</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Noto+Sans+SC:wght@400;500;700&family=Source+Sans+3:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a report read top to bottom. Narrow reading column, tables and bars as the working parts,
+   one flow diagram (paper vs this pipeline) as the single visual centrepiece.
+   Palette: cool paper, ink blue-black, teal accent; category colours are semantic (A/B/C/D). */
+:root {
+  --bg: #f4f6f8;
+  --surface: #ffffff;
+  --surface-2: #eaeff3;
+  --fg: #13202b;
+  --muted: #55646f;
+  --rule: #d5dce2;
+  --accent: #0a6d73;
+  --accent-soft: #d8eef0;
+  --cat-a: #1d5fa8;  --cat-a-bg: #dce9f7;
+  --cat-b: #8a4b00;  --cat-b-bg: #fbe8c9;
+  --cat-c: #3f5b3a;  --cat-c-bg: #dfeedb;
+  --cat-d: #8b2a3d;  --cat-d-bg: #f6dde2;
+  --bar-before: #8d99a3;
+  --bar-after: #0a6d73;
+  --bar-ref: #13202b;
+  --warn-bg: #fdf3d9;
+  --warn-fg: #5b4300;
+  --code-bg: #e7edf1;
+  --font-display: "Bricolage Grotesque", "Noto Sans SC", system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Noto Sans SC", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f171e; --surface: #16212a; --surface-2: #1d2b36; --fg: #e4ebf0; --muted: #94a5b1;
+    --rule: #2c3b47; --accent: #4fc3c9; --accent-soft: #123a3e;
+    --cat-a: #8fbcf0; --cat-a-bg: #15304f; --cat-b: #f2bf72; --cat-b-bg: #46300f;
+    --cat-c: #a9d3a1; --cat-c-bg: #1f3a1c; --cat-d: #f0a3b2; --cat-d-bg: #4a1a26;
+    --bar-before: #6c7a86; --bar-after: #4fc3c9; --bar-ref: #e4ebf0;
+    --warn-bg: #3a2f10; --warn-fg: #f3dc9b; --code-bg: #1d2b36; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f171e; --surface: #16212a; --surface-2: #1d2b36; --fg: #e4ebf0; --muted: #94a5b1;
+  --rule: #2c3b47; --accent: #4fc3c9; --accent-soft: #123a3e;
+  --cat-a: #8fbcf0; --cat-a-bg: #15304f; --cat-b: #f2bf72; --cat-b-bg: #46300f;
+  --cat-c: #a9d3a1; --cat-c-bg: #1f3a1c; --cat-d: #f0a3b2; --cat-d-bg: #4a1a26;
+  --bar-before: #6c7a86; --bar-after: #4fc3c9; --bar-ref: #e4ebf0;
+  --warn-bg: #3a2f10; --warn-fg: #f3dc9b; --code-bg: #1d2b36; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 16px; line-height: 1.7;
+  padding-block: 0;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 920px; margin-inline: auto; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+header.top { padding-block: 40px 20px; border-bottom: 1px solid var(--rule); }
+.kicker { font-family: var(--font-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 10px; }
+h1 { font-family: var(--font-display); font-size: clamp(28px, 5vw, 42px); line-height: 1.15; margin: 0 0 14px; font-weight: 700; text-wrap: balance; }
+.cite { color: var(--muted); font-size: 15px; margin: 0 0 14px; max-width: 70ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.meta li { font-family: var(--font-mono); font-size: 12px; background: var(--surface-2); border-radius: 4px; padding: 3px 8px; color: var(--muted); }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; padding-block: 14px; border-bottom: 1px solid var(--rule); font-size: 14px; }
+nav.toc a { text-decoration: none; color: var(--muted); }
+nav.toc a:hover { color: var(--accent); text-decoration: underline; }
+
+.note { background: var(--warn-bg); color: var(--warn-fg); border-radius: 6px; padding: 12px 16px; font-size: 14.5px; margin-block: 22px; }
+
+/* sections */
+section { padding-block: 34px 6px; }
+h2 { font-family: var(--font-display); font-size: 26px; line-height: 1.25; margin: 0 0 14px; text-wrap: balance; }
+h3 { font-family: var(--font-display); font-size: 19px; margin: 28px 0 8px; text-wrap: balance; }
+p { margin: 0 0 12px; max-width: 72ch; }
+ul, ol { margin: 0 0 12px; padding-left: 1.3em; max-width: 72ch; }
+li { margin-bottom: 4px; }
+code { font-family: var(--font-mono); font-size: .88em; background: var(--code-bg); padding: 1px 5px; border-radius: 3px; }
+.small { font-size: 14px; color: var(--muted); }
+
+/* tables */
+.tablewrap { overflow-x: auto; margin-block: 8px 18px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14.5px; min-width: 560px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 12px; border-bottom: 1px solid var(--rule); }
+th { font-weight: 600; font-size: 13px; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+#overview td:last-child { white-space: nowrap; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
+
+/* pills */
+.pill { display: inline-block; font-family: var(--font-mono); font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 10px; white-space: nowrap; }
+.pill.a { background: var(--cat-a-bg); color: var(--cat-a); }
+.pill.b { background: var(--cat-b-bg); color: var(--cat-b); }
+.pill.c { background: var(--cat-c-bg); color: var(--cat-c); }
+.pill.d { background: var(--cat-d-bg); color: var(--cat-d); }
+.pill.on { background: var(--accent-soft); color: var(--accent); }
+.pill.off { background: var(--surface-2); color: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 14px; margin-block: 6px 12px; }
+
+/* flow diagram */
+.flowbox { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px; margin-block: 14px 8px; }
+.flowrow + .flowrow { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--rule); }
+.flowtitle { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 10px; }
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.step { flex: 1 1 130px; min-width: 0; background: var(--surface-2); border: 1px solid var(--rule); border-radius: 6px; padding: 8px 10px; font-size: 13.5px; line-height: 1.4; position: relative; }
+.step b { display: block; font-weight: 600; margin-bottom: 2px; }
+.step span { color: var(--muted); font-size: 12.5px; }
+.step.new { border: 1.5px dashed var(--cat-b); background: var(--cat-b-bg); }
+.step.new span { color: var(--cat-b); }
+.step.same { border-color: var(--cat-a); }
+.step.new .tag { color: var(--surface); font-size: 11px; position: absolute; top: -9px; right: 8px; font-family: var(--font-mono); font-size: 11px; background: var(--cat-b); color: var(--surface); padding: 0 6px; border-radius: 8px; }
+
+/* improvement blocks */
+.imp { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 18px 8px; margin-block: 16px; }
+.imp h3 { margin-top: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; }
+dl.rows { display: grid; grid-template-columns: 5.5em 1fr; gap: 6px 14px; margin: 0 0 8px; }
+dl.rows dt { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 3px; }
+dl.rows dd { margin: 0; min-width: 0; }
+dl.rows dd p, dl.rows dd ul { margin-bottom: 6px; }
+@media (max-width: 560px) { dl.rows { grid-template-columns: 1fr; gap: 0; } dl.rows dt { padding-top: 8px; } }
+
+/* bar charts */
+.bars { margin-block: 8px 14px; }
+.bartitle { font-size: 13.5px; color: var(--muted); margin: 0 0 6px; }
+.brow { display: grid; grid-template-columns: 96px 1fr 64px; gap: 8px; align-items: center; margin-bottom: 5px; font-size: 13.5px; }
+.brow .track { background: var(--surface-2); border-radius: 3px; height: 14px; overflow: hidden; }
+.brow .track i { display: block; height: 100%; border-radius: 3px; }
+.brow .val { font-family: var(--font-mono); font-size: 12.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.brow .lab { color: var(--muted); }
+.i-before { background: var(--bar-before); } .i-after { background: var(--bar-after); } .i-ref { background: var(--bar-ref); }
+.keys { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.keys i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.group + .group { margin-top: 10px; }
+
+/* methods wording */
+.quote { background: var(--surface); border: 1px solid var(--rule); border-left: 4px solid var(--accent); border-radius: 6px; padding: 14px 16px; font-size: 14.5px; line-height: 1.65; max-width: none; }
+.quote p { max-width: none; }
+button.copy { font: inherit; font-size: 13px; background: var(--accent); color: var(--surface); border: 0; border-radius: 4px; padding: 5px 12px; cursor: pointer; margin-block: 8px 0; }
+button.copy:hover { filter: brightness(1.1); }
+footer { padding-block: 30px 40px; margin-top: 30px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 13.5px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+
+<div class="wrap">
+<header class="top">
+  <p class="kicker">方法对照报告 · v0.3.0</p>
+  <h1>本流程与原论文方法的区别和改进</h1>
+  <p class="cite">对照文献：van der Meer, J. N., et al. (2016). <em>Carbon-wire loop based artifact correction outperforms post-processing EEG/fMRI corrections—A validation of a real-time simultaneous EEG/fMRI correction method.</em> NeuroImage, 125, 880–894.</p>
+  <ul class="meta">
+    <li>仓库 albertleemon/CWRegrTool</li>
+    <li>分支 claude/awesome-clarke-obslcf</li>
+    <li>MATLAB + Python</li>
+  </ul>
+</header>
+<nav class="toc" aria-label="目录">
+  <a href="#paper">1 论文做了什么</a><a href="#same">2 保持不变</a><a href="#overview">3 区别总览</a><a href="#detail">4 改进细节</a><a href="#result">5 测试结果</a><a href="#todo">6 未完成</a><a href="#wording">7 方法部分写法</a><a href="#refs">8 参考文献</a>
+</nav>
+
+<div class="note">论文内容只来自本仓库文档和代码中已经记录的部分，没有重新逐段核对原文。窗长、阈值、模板数、报告的降幅等具体数值，写进论文或基金文本前请对照原文再确认；作者、页码和 DOI 也请自行核对。</div>
+
+<section id="paper">
+  <h2>1 原论文做了什么</h2>
+  <h3>问题：三类大伪影叠加在 EEG 上</h3>
+  <div class="tablewrap"><table>
+    <thead><tr><th>伪影</th><th>来源</th><th>特点</th></tr></thead>
+    <tbody>
+      <tr><td>梯度伪影</td><td>MRI 梯度切换</td><td>幅度极大，与扫描严格同步，每个 volume 形状几乎相同</td></tr>
+      <tr><td>BCG（心冲击）伪影</td><td>心跳带动头和电极在磁场中运动</td><td>与心跳相关，但每次形状不同，不与扫描同步</td></tr>
+      <tr><td>氦泵 / 振动伪影</td><td>氦压缩机振动传到电极和导线</td><td>宽频、窄峰，与扫描不同步</td></tr>
+    </tbody>
+  </table></div>
+  <p>传统做法（AAS、OBS、OBS-ICA 等）在记录之后用模板或成分分解去除 BCG，需要 ECG 的 R 波，并假设伪影形状在一段时间内稳定。</p>
+
+  <h3>核心想法</h3>
+  <p>BCG 和氦泵伪影的共同本质是<strong>电极和导线在磁场中的微小运动</strong>。碳线环（carbon-wire loop，CWL）不接触头皮，只感应运动，不含脑电。因此把 EEG 对 CWL 做线性回归：能被 CWL 线性解释的部分就是运动伪影，减掉即可。这样既不需要 ECG 的 R 波，也不需要模板，原则上可以实时进行。</p>
+
+  <h3>论文的具体配置</h3>
+  <ol>
+    <li><strong>梯度伪影：</strong>Bergen EEG-fMRI 工具箱（EEGLAB 插件，图形界面）做模板减法，用头动信息引导模板选择（Moosmann et al., 2009）：每个模板用邻近 25 个伪影片段，帧间位移超过 0.3 mm 时重置模板缓冲区。EEG 和 CWL 通道一起校正。</li>
+    <li><strong>滤波：</strong>EEG 和 CWL 同一个 0.33–125 Hz 带通。</li>
+    <li><strong>CWL 回归：</strong>4 s Hann 窗，相邻窗重叠 50%；每个 CWL 取 ±21 ms 的时间延迟；每窗对每个 EEG 通道做最小二乘，窗间叠加后得到整条伪影轨迹并减去。窗口很短，系数随头姿和氦泵状态自适应。</li>
+    <li><strong>采样率：</strong>500 Hz（约 126 个回归量；5000 Hz 下约 1266 个）。</li>
+  </ol>
+
+  <h3>验证</h3>
+  <p>用同一被试磁体外的 EEG 作参考：平均功率谱的相对谱距离（式 4）；睁眼/闭眼 alpha 增幅的 Jaccard 重叠（式 5）和地形图距离（式 6）；在氦泵开 / 关两种条件下，与 AAS、OBS、OBS-ICA 比较；第三部分是 EEG–BOLD 分析（本流程不包含）。本仓库文档记载论文报告 1–20 Hz 附近约 10 dB 的降幅，我们在 sub-BOR5A 上复现到 8–14 dB。</p>
+</section>
+
+<section id="same">
+  <h2>2 保持不变的部分</h2>
+  <div class="tablewrap"><table>
+    <thead><tr><th>部分</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>CWL 回归核心</td><td>直接调用原作者的 <code>run_cwregression</code>：4 s Hann 窗、±21 ms、taper 1、重叠 50%，不做修改（MATLAB 版）。Python 版按论文和原代码移植。</td></tr>
+      <tr><td>梯度校正算法</td><td>与 Bergen 的模板选择同一逻辑，<code>m_rp_info</code> / <code>m_moving_average</code> 直接使用原文件；模板由 1 Hz 高通副本平均，相关性差的模板按 2.5×中位数剔除。</td></tr>
+      <tr><td>滤波与采样率</td><td>0.33–125 Hz 带通，EEG 与 CWL 同一滤波器；500 Hz。</td></tr>
+      <tr><td>校正对象</td><td>梯度校正作用于所有通道（含 CWL、ECG）；CWL 回归只作用于 EEG 通道。</td></tr>
+      <tr><td>评估指标</td><td>论文式 4、5、6 已实现（<code>metrics.py</code>、<code>cwl_eoec_metrics.m</code>）。</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="overview">
+  <h2>3 区别与改进总览</h2>
+  <div class="flowbox" role="img" aria-label="论文流程与本流程的步骤对比">
+    <div class="flowrow">
+      <p class="flowtitle">原论文</p>
+      <div class="flow">
+        <div class="step same"><b>梯度模板减法</b><span>头动引导，25 模板，0.3 mm</span></div>
+        <div class="step same"><b>带通 0.33–125 Hz</b><span>EEG 与 CWL 同一滤波器</span></div>
+        <div class="step same"><b>降到 500 Hz</b></div>
+        <div class="step same"><b>CWL 回归</b><span>4 s Hann，±21 ms</span></div>
+      </div>
+    </div>
+    <div class="flowrow">
+      <p class="flowtitle">本流程</p>
+      <div class="flow">
+        <div class="step same"><b>梯度模板减法</b><span>无界面，可读 fMRIPrep 头动</span></div>
+        <div class="step new"><span class="tag">新增 · 可选</span><b>OBS 残差 PCA</b><span>4 成分，60 Hz 以上</span></div>
+        <div class="step same"><b>带通 + 500 Hz</b><span>同上</span></div>
+        <div class="step same"><b>CWL 回归</b><span>原代码，自动裁掉未校正首尾</span></div>
+        <div class="step new"><span class="tag">新增 · 可选</span><b>估计伪影低通</b><span>90 Hz，8 阶零相位</span></div>
+        <div class="step new"><span class="tag">新增 · 可选</span><b>心跳锁定 BCG AAS</b><span>输出 05</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="legend">
+    <span><span class="pill a">A</span> 实现方式改进，算法不变</span>
+    <span><span class="pill b">B</span> 新增方法，论文没有</span>
+    <span><span class="pill c">C</span> 验证和工程改进</span>
+    <span><span class="pill d">D</span> 未做</span>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>步骤</th><th>原论文</th><th>本流程</th><th>类别</th><th>默认</th></tr></thead>
+    <tbody>
+      <tr><td>1 梯度校正</td><td>Bergen GUI</td><td>同一算法的无界面实现，可批处理；支持 fMRIPrep 头动文件</td><td><span class="pill a">A</span></td><td><span class="pill on">开</span></td></tr>
+      <tr><td>1a 头动阈值</td><td>0.3 mm</td><td>阈值可调；本数据最大帧间位移 0.293 mm，0.3 下无事件，等同 moving average</td><td><span class="pill a">A</span></td><td>0.3</td></tr>
+      <tr><td>1b 梯度残差</td><td>无</td><td>OBS 残差 PCA（Niazy 2005），4 个主成分，60 Hz 以上</td><td><span class="pill b">B</span></td><td><span class="pill off">关</span> 推荐开</td></tr>
+      <tr><td>2 滤波与降采样</td><td>0.33–125 Hz；文中以 500 Hz 计</td><td>相同，并明确降到 500 Hz</td><td><span class="pill a">A</span></td><td><span class="pill on">开</span></td></tr>
+      <tr><td>3 CWL 回归</td><td>原代码</td><td>原代码不变；自动裁掉未校正首尾</td><td><span class="pill a">A</span></td><td><span class="pill on">开</span></td></tr>
+      <tr><td>3b 估计伪影低通</td><td>无</td><td>对回归估计出的伪影做 90 Hz 低通后再减</td><td><span class="pill b">B</span></td><td><span class="pill off">关</span> 推荐开</td></tr>
+      <tr><td>3c BCG AAS</td><td>仅作对比方法</td><td>CWL 后可选再做心跳锁定 AAS</td><td><span class="pill b">B</span></td><td><span class="pill off">关</span></td></tr>
+      <tr><td>4 评估</td><td>与磁体外记录比较</td><td>已实现论文指标；新增随机相位对照、残峰分析、逐 volume 检查、分阶段谱和去噪报告</td><td><span class="pill c">C</span></td><td>–</td></tr>
+      <tr><td>5 运行安全</td><td>–</td><td>运行清单、标记间隔检查、单位换算、复现信息</td><td><span class="pill c">C</span></td><td><span class="pill on">开</span></td></tr>
+      <tr><td>6 OBS / OBS-ICA 对比、EEG–BOLD</td><td>有</td><td>未实现</td><td><span class="pill d">D</span></td><td>–</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="detail">
+  <h2>4 改进细节</h2>
+
+  <div class="imp">
+    <h3><span class="pill a">A</span>4.1 梯度校正：无界面实现与头动输入</h3>
+    <dl class="rows">
+      <dt>原论文</dt><dd>Bergen EEGLAB 插件的图形界面，每次手工操作，不便批量和复现。</dd>
+      <dt>本流程</dt><dd><p><code>cwl_gradient_correct.m</code> 与 Bergen <code>CorrectionMatrix</code> 同一逻辑，无界面；直接读取 fMRIPrep 的 <code>*_desc-confounds_timeseries.tsv</code>（<code>trans_x/y/z</code>、<code>rot_x/y/z</code>，mm 与弧度，与 SPM <code>rp</code> 相同）。</p><p>校正范围（第一个标记到最后一个标记 + TR）以外没有模板，仍含梯度伪影，输出直接删去。</p></dd>
+      <dt>省略</dt><dd>Bergen 的基线校正和削波处理；检查本数据无削波（最大 10.5 mV，量程 16.4 mV）。</dd>
+      <dt>效果</dt><dd>sub-BOR5A：层频率谐波（16.84 Hz 及其倍数）在 63 个 EEG 通道平均谱上降低约 4–5 个数量级。</dd>
+    </dl>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill b">B</span>4.2 OBS 残差去除（不在论文中）</h3>
+    <dl class="rows">
+      <dt>问题</dt><dd>模板减法后，84.5、101、117.75 Hz 处仍有残峰，高出背景 10–14 dB；CWL 回归只能降 3–6 dB。</dd>
+      <dt>诊断</dt><dd>
+        <ul>
+          <li>峰间距与 <code>SliceTiming</code> 对应的层频率一致（16.86 Hz vs 16.84 Hz），精细结构落在 1/TR 网格上：是梯度伪影的层频率谐波。</li>
+          <li>逐 volume 时间错位标准差 ≤ 0.005 个采样点（约 1 µs）：不是时间抖动。</li>
+          <li>0 个样本到达量程：不是削波。与头动（FD）相关 r = 0.05：不是头动。</li>
+          <li>少数 volume 的残差高出 10–60 倍，所有通道（含 CWL）同时出现：<strong>伪影形状在部分 volume 中变化，平均模板无法跟踪。</strong></li>
+        </ul></dd>
+      <dt>方法</dt><dd>Niazy et al. (2005) 的最优基集（FASTR 的 OBS 步骤）。每个通道把模板减法后的残差高通到 60 Hz，按 volume 做 PCA，去掉前 4 个主成分；残差异常大的 volume（&gt; 100× 中位数）不参与估计。</dd>
+      <dt>效果</dt><dd>
+        <div class="bars">
+          <p class="bartitle">CWL 回归后残峰高出背景的 dB（sub-BOR5A）</p>
+          <div class="keys"><span><i class="i-before"></i>不加 OBS</span><span><i class="i-after"></i>加 OBS</span></div>
+          <div class="group">
+            <div class="brow"><span class="lab">84.5 Hz</span><div class="track"><i class="i-before" style="width:69%"></i></div><span class="val">6.9 dB</span></div>
+            <div class="brow"><span class="lab"></span><div class="track"><i class="i-after" style="width:25%"></i></div><span class="val">2.5 dB</span></div>
+          </div>
+          <div class="group">
+            <div class="brow"><span class="lab">101.0 Hz</span><div class="track"><i class="i-before" style="width:85%"></i></div><span class="val">8.5 dB</span></div>
+            <div class="brow"><span class="lab"></span><div class="track"><i class="i-after" style="width:17%"></i></div><span class="val">1.7 dB</span></div>
+          </div>
+          <div class="group">
+            <div class="brow"><span class="lab">117.75 Hz</span><div class="track"><i class="i-before" style="width:67%"></i></div><span class="val">6.7 dB</span></div>
+            <div class="brow"><span class="lab"></span><div class="track"><i class="i-after" style="width:23%"></i></div><span class="val">2.3 dB</span></div>
+          </div>
+        </div>
+        <p>0–125 Hz 内不再有高于背景 3 dB 的峰；1–30 Hz 功率变化 −0.01 dB，30–60 Hz −0.03 dB。</p></dd>
+      <dt>风险</dt><dd>与 TR 锁相的诱发活动（刺激严格按 TR 呈现）可能被部分去除，任务态实验需注意。</dd>
+      <dt>开关</dt><dd><code>obs_npc</code>（0 = 关）、<code>obs_hp</code>（60 或 70 Hz）；Python：<code>--obs-npc</code>、<code>--obs-hp</code>。使用时请在方法部分注明 Niazy et al. (2005)。</dd>
+    </dl>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill b">B</span>4.3 对估计伪影做低通（不在论文中）</h3>
+    <dl class="rows">
+      <dt>问题</dt><dd>CWL 回归后，90 Hz 以上的功率反而比回归前高 2–3 dB，101、118 Hz 又出现小峰。</dd>
+      <dt>原因</dt><dd>回归系数由能量占主导的低频（BCG）决定，同一组系数也作用于碳线环自身的高频噪声；EEG 中没有这些成分，减去它们等于把它们加进 EEG。随机相位对照中同样可见。本被试氦泵伪影很弱，高频几乎没有可去的伪影。</dd>
+      <dt>失败的尝试</dt><dd>对碳线环信号本身低通，会使带延迟的回归变得病态，在过渡带（80–105 Hz）放大噪声，已弃用。</dd>
+      <dt>最终方法</dt><dd>回归照常进行，只对<strong>估计出的伪影</strong>做 8 阶零相位低通（<code>cwl_lowpass = 90</code>），再从 EEG 减去。</dd>
+      <dt>效果</dt><dd>90–125 Hz 与回归前重合；alpha 功率比 0.0463 → 0.0462，1–7 Hz 功率比 0.1061 → 0.1061，基本不变。</dd>
+      <dt>限制</dt><dd>90 Hz 以上的伪影（氦泵开启时的 60–120 Hz 氦泵伪影）不会被去除。<strong>氦泵开着的数据应关闭此选项。</strong></dd>
+      <dt>开关</dt><dd><code>cwl_lowpass</code>（0 = 关）；Python：<code>--artifact-lowpass</code>。</dd>
+    </dl>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill b">B</span>4.4 CWL 后的 BCG AAS（可选，默认关闭）</h3>
+    <dl class="rows">
+      <dt>原因</dt><dd>残余 BCG 集中在碳线环覆盖不到的电极（左后颞边缘最明显）。一次测试运行中心跳锁定残差 13.7 → 2.68 µV（磁体外约 1.04 µV），TP9、TP7、P7、PO7、P5 占全部超出量的约 46%。</dd>
+      <dt>方法</dt><dd>Allen et al. (1998) 平均伪影减法。R 波从 ECG 检测（10–35 Hz 带通、差分平方、80 ms 滑动平均，最小峰间距 0.7×心动周期，对扫描仪内高大 T 波稳健）；每个心跳减去最近 21 个心跳的平均。</dd>
+      <dt>代价</dt><dd>只去除与心跳严格锁定的部分，<strong>心跳锁相的脑活动（如心跳诱发电位）也会被去除</strong>；真实数据上的效果尚需验证。</dd>
+      <dt>开关</dt><dd><code>bcg_aas = 1</code>（可加 <code>bcg_hr</code>）；Python：<code>--bcg-aas</code>、<code>--bcg-hr</code>。输出 <code>05_bcg_aas.set</code>。</dd>
+    </dl>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill a">A</span>4.5 CWL 回归的有效区间</h3>
+    <dl class="rows">
+      <dt>原工具</dt><dd>回归不校正开头约半个窗和结尾约 1–3 个窗（实测不校正开头约 2 s、结尾约 5 s）。</dd>
+      <dt>本流程</dt><dd>输出只保留原工具实际校正过的区间。区间由原工具返回的<strong>窗口权重</strong>（权重 &gt; 0）确定，而不是“数值是否发生变化”：后者在零 CWL、零拟合或短记录时会得到空区间，边缘恰好拟合为零还会让裁剪位置漂移。</dd>
+    </dl>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill c">C</span>4.6 验证和诊断</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>工具</th><th>内容</th><th>论文中</th></tr></thead>
+      <tbody>
+        <tr><td>随机相位 CWL 对照 <code>cwl_diagnose</code></td><td>用相位随机化的 CWL 重做回归，作为过拟合下限</td><td>无</td></tr>
+        <tr><td>残峰分析 <code>analyze_residual_peaks.py</code></td><td>残峰是否体积锁定、是否在 1/TR 网格上、逐 volume 和逐通道分布、与头动相关</td><td>无</td></tr>
+        <tr><td>逐 volume 检查 <code>check_volume_alignment.py</code></td><td>原始数据上的时间错位和削波</td><td>无</td></tr>
+        <tr><td>心跳锁定残差 <code>check_bcg_residual.py</code></td><td>R 波锁定平均的残差及其头皮图，以磁体外为下限</td><td>无</td></tr>
+        <tr><td>去除成分的邻近电极相干 <code>check_removed_signal.py</code></td><td>CWL 是否误去脑电</td><td>无</td></tr>
+        <tr><td>论文指标</td><td>谱距离（式 4）、EO/EC alpha 的 Jaccard（式 5）、地形图距离（式 6）</td><td>有</td></tr>
+        <tr><td><strong>去噪报告 <code>denoise_report.py</code></strong></td><td>每一步的平均谱、相对磁体外的 dB 差、指标表、每一步的头皮分布图、后部 alpha 峰（扣 1/f）</td><td>无</td></tr>
+      </tbody>
+    </table></div>
+    <p>去噪报告的指标：1–30 Hz RMS、全频带和 1–30 Hz 谱距离、7 个频段功率及相对磁体外 dB、层频率谐波残峰、心跳锁定残差、每步 1–30 Hz 功率变化、CWL 去除方差比例、对数谱相关、alpha 地形相关，以及后部 alpha 峰频率、峰高和相对磁体外的功率。</p>
+    <p>论文的 EO/EC Jaccard（式 5）和地形距离（式 6）需要同一被试磁体内外都有睁眼和闭眼的段。我们的两段记录都是闭眼静息，所以只能直接比较 alpha 峰，做不了反应性比较。</p>
+  </div>
+
+  <div class="imp">
+    <h3><span class="pill c">C</span>4.7 运行安全与可复现</h3>
+    <ul>
+      <li><strong>运行清单</strong> <code>run_manifest.json</code>：每次运行先删除输出目录里旧的阶段文件，结束时写入本次实际生成的阶段；评估脚本只采用清单里列出的阶段，避免旧的 <code>02b</code> / <code>05</code> 被当成本次结果。仍建议每组参数使用独立输出目录。</li>
+      <li><strong>标记检查：</strong>体积标记间隔偏离 TR 超过 1%（漏标、重复、多余）直接报错；否则漏掉的那一段没有模板校正却会被保留。</li>
+      <li><strong>BrainVision 单位：</strong>按通道单位（V / mV / nV / µV）换算为 µV。</li>
+      <li><strong>复现信息：</strong><code>EEG.etc.cwl_pipeline</code> 记录输入 <code>.vhdr</code>、全部原始标记位置、裁剪起点（<code>first_kept_raw_sample</code>、<code>output_start_raw_s</code>）、头动文件/阈值/事件数、模板数、回归参数、OBS 参数、创建时间，便于与原始 EEG/fMRI 对齐。</li>
+      <li><strong>Python 版输出</strong>保留事件、通道类型（EEG/ECG/其余）和电极位置。</li>
+      <li><strong>MATLAB 版独立化：</strong>只需 MATLAB + Signal Processing Toolbox，不需要 EEGLAB。在合成 BrainVision 记录上与旧版（EEGLAB + bva-io + firfilt）逐阶段比较，02、02b、03、04、05 五个输出的数据差值均为 0。</li>
+      <li><strong>跨语言检查</strong> <code>cwl_crosscheck</code> 共 8 项：模板矩阵、梯度校正、OBS（去除比例与输出波形）、R 波检测、BCG AAS、CWL 回归内部区域、降采样。不覆盖 I/O、事件、带通和整条流程端到端。</li>
+    </ul>
+  </div>
+</section>
+
+<section id="result">
+  <h2>5 一次测试运行的结果</h2>
+  <p>仅供参考：单个被试，不能直接推广。磁体外参考是同一被试的闭眼静息记录。</p>
+  <div class="keys"><span><i class="i-before"></i>03 回归前</span><span><i class="i-after"></i>04 CWL 后</span><span><i class="i-ref"></i>磁体外</span></div>
+  <div class="bars">
+    <p class="bartitle">1–30 Hz RMS（µV）</p>
+    <div class="brow"><span class="lab">03</span><div class="track"><i class="i-before" style="width:100%"></i></div><span class="val">20.5</span></div>
+    <div class="brow"><span class="lab">04</span><div class="track"><i class="i-after" style="width:40.3%"></i></div><span class="val">8.27</span></div>
+    <div class="brow"><span class="lab">磁体外</span><div class="track"><i class="i-ref" style="width:41.1%"></i></div><span class="val">8.42</span></div>
+  </div>
+  <div class="bars">
+    <p class="bartitle">心跳锁定 RMS（µV）</p>
+    <div class="brow"><span class="lab">03</span><div class="track"><i class="i-before" style="width:100%"></i></div><span class="val">13.7</span></div>
+    <div class="brow"><span class="lab">04</span><div class="track"><i class="i-after" style="width:19.6%"></i></div><span class="val">2.68</span></div>
+    <div class="brow"><span class="lab">磁体外</span><div class="track"><i class="i-ref" style="width:7.6%"></i></div><span class="val">1.04</span></div>
+  </div>
+  <div class="bars">
+    <p class="bartitle">1–30 Hz 谱距离（%，越小越好）</p>
+    <div class="brow"><span class="lab">03</span><div class="track"><i class="i-before" style="width:100%"></i></div><span class="val">436</span></div>
+    <div class="brow"><span class="lab">04</span><div class="track"><i class="i-after" style="width:15.8%"></i></div><span class="val">69</span></div>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>指标</th><th class="num">03（回归前）</th><th class="num">04（CWL 后）</th><th class="num">磁体外</th></tr></thead>
+    <tbody>
+      <tr><td>1–30 Hz RMS（µV）</td><td class="num">20.5</td><td class="num">8.27</td><td class="num">8.42</td></tr>
+      <tr><td>1–30 Hz 谱距离（%）</td><td class="num">436</td><td class="num">69</td><td class="num">0</td></tr>
+      <tr><td>心跳锁定 RMS（µV）</td><td class="num">13.7</td><td class="num">2.68（占 20.7%）</td><td class="num">1.04</td></tr>
+      <tr><td>CWL 去除方差比例</td><td class="num">–</td><td class="num">77%</td><td class="num">–</td></tr>
+      <tr><td>对数谱相关</td><td class="num">0.905</td><td class="num">0.939</td><td class="num">1</td></tr>
+    </tbody>
+  </table></div>
+  <p>仍存在的差异：</p>
+  <ul>
+    <li>60–125 Hz 比磁体外高约 4.5–6.7 dB，各步骤都没改善，更可能是磁体内的本底噪声。</li>
+    <li>8–13 Hz 比磁体外低约 2.6 dB：状态不同或被过度去除，需要用 alpha 峰指标和 <code>check_removed_signal</code> 区分。</li>
+    <li>1–30 Hz RMS 与磁体外接近有一部分是抵消：1–8 Hz 仍偏高 1.4–2.8 dB，8–13 Hz 又偏低。</li>
+    <li>磁体外参考本身有 50 Hz 工频峰和 &lt;1 Hz 漂移，不是纯净真值。</li>
+  </ul>
+</section>
+
+<section id="todo">
+  <h2>6 尚未完成，与论文仍有差距</h2>
+  <ol>
+    <li>论文作为对比的 BCG 方法：AAS 已作为可选步骤实现；<strong>OBS 和 OBS-ICA 未实现</strong>。</li>
+    <li><strong>EEG–BOLD 分析</strong>（论文第三部分）未做。</li>
+    <li>没有睁眼段时无法计算论文的 Jaccard（式 5）和地形距离（式 6）。</li>
+    <li>Python 流程尚未在真实数据上运行。</li>
+    <li>BCG AAS 在真实数据上的效果尚需验证，可能连心跳锁相的脑活动一起去掉。</li>
+    <li>90 Hz 以上的伪影（氦泵开启）不会被低通选项去除。</li>
+    <li>50 Hz 工频峰仍在，可在后续分析中陷波。</li>
+  </ol>
+</section>
+
+<section id="wording">
+  <h2>7 方法部分的建议写法</h2>
+  <p>把未启用的步骤从句子里删掉；括号里的参考文献请核对后再引用。</p>
+  <div class="quote" id="methods-text">
+    <p>EEG–fMRI data were preprocessed following van der Meer et al. (2016): gradient artifacts were removed from all channels (EEG, ECG and carbon-wire loops) by head-motion-informed average-artifact subtraction (25 templates, 0.3 mm displacement threshold; Moosmann et al., 2009; Bergen EEG-fMRI toolbox), followed by identical zero-phase band-pass filtering (0.33–125 Hz) of EEG and loop signals, downsampling to 500 Hz, and windowed carbon-wire-loop regression (4 s Hann windows, 50% overlap, ±21 ms delays; original CWRegrTool code).</p>
+    <p>Departures from the published pipeline (all parameter values and the choice to enable each step reported in the Supplement): (i) the residual gradient artifact (slice-frequency harmonics) was further reduced by an optimal-basis-set residual PCA (4 components, &gt;60 Hz; Niazy et al., 2005); (ii) the artifact estimated by the regression was low-pass filtered at 90 Hz before subtraction, so that loop noise was not added to the EEG above this frequency; (iii) [optional] remaining heartbeat-locked residuals were removed by average artifact subtraction (Allen et al., 1998).</p>
+    <p>Data quality was assessed against an eyes-closed resting recording from the same participant outside the scanner (relative spectral distance, band power, heartbeat-locked residual, posterior alpha peak).</p>
+  </div>
+  <button class="copy" id="copy-btn" type="button">复制英文段落</button>
+  <span class="small" id="copy-msg" role="status"></span>
+</section>
+
+<section id="refs">
+  <h2>8 参考文献</h2>
+  <ul class="small">
+    <li>Allen, P. J., Polizzi, G., Krakow, K., Fish, D. R., &amp; Lemieux, L. (1998). Identification of EEG events in the MR scanner: the problem of pulse artifact and a method for its subtraction. <em>NeuroImage</em>, 8, 229–239.</li>
+    <li>Allen, P. J., Josephs, O., &amp; Turner, R. (2000). A method for removing imaging artifact from continuous EEG recorded during functional MRI. <em>NeuroImage</em>, 12(2), 230–239.</li>
+    <li>Moosmann, M., et al. (2009). Realignment parameter-informed artefact correction for simultaneous EEG–fMRI recordings. <em>NeuroImage</em>, 45(4), 1144–1150.</li>
+    <li>Niazy, R. K., et al. (2005). Removal of FMRI environment artifacts from EEG data using optimal basis sets. <em>NeuroImage</em>, 28(3), 720–737.</li>
+    <li>van der Meer, J. N., et al. (2016). Carbon-wire loop based artifact correction outperforms post-processing EEG/fMRI corrections—A validation of a real-time simultaneous EEG/fMRI correction method. <em>NeuroImage</em>, 125, 880–894.</li>
+  </ul>
+  <p class="small">以上条目除 van der Meer 2016 的标题和页码来自仓库文档外，其余为按记忆整理，作者和页码请在投稿前核对。</p>
+</section>
+
+<footer>由 docs/METHODS_VS_PAPER.md（v0.3.0）生成。仓库：albertleemon/CWRegrTool，分支 claude/awesome-clarke-obslcf。</footer>
+</div>
+
+<script>
+(function () {
+  var btn = document.getElementById('copy-btn'), msg = document.getElementById('copy-msg');
+  var box = document.getElementById('methods-text');
+  function select() {
+    var r = document.createRange(); r.selectNodeContents(box);
+    var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+  btn.addEventListener('click', function () {
+    var text = box.innerText;
+    var done = function () { msg.textContent = ' 已复制'; };
+    var fail = function () { select(); msg.textContent = ' 已选中文字，请按 Ctrl/Cmd+C 复制'; };
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fail);
+      } else { fail(); }
+    } catch (e) { fail(); }
+  });
+})();
+</script>
+
+</body>
+</html>
